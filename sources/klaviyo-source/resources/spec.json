@@ -27,20 +27,17 @@
               "client_id": {
                 "type": "string",
                 "title": "Client ID",
-                "description": "Klaviyo OAuth client ID.",
-                "airbyte_secret": true
+                "description": "Klaviyo OAuth client ID."
               },
               "client_secret": {
                 "type": "string",
                 "title": "Client Secret",
-                "description": "Klaviyo OAuth client secret.",
-                "airbyte_secret": true
+                "description": "Klaviyo OAuth client secret."
               },
               "refresh_token": {
                 "type": "string",
                 "title": "Refresh Token",
-                "description": "Klaviyo OAuth refresh token.",
-                "airbyte_secret": true
+                "description": "Klaviyo OAuth refresh token."
               }
             }
           },
@@ -57,8 +54,7 @@
               "api_key": {
                 "type": "string",
                 "title": "API Key",
-                "description": "Klaviyo API Key. See our <a href=\"https://docs.airbyte.com/integrations/sources/klaviyo\">docs</a> if you need help finding this key.",
-                "airbyte_secret": true
+                "description": "Klaviyo API Key. See our <a href=\"https://docs.airbyte.com/integrations/sources/klaviyo\">docs</a> if you need help finding this key."
               }
             }
           }
