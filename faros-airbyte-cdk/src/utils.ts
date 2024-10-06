@@ -153,6 +153,23 @@ function minimizeSpecObject(config: SpecObject): void {
 }
 
 const SOURCE_COMMON_PROPERTIES = {
+  // useful for neon blue connectors but logic is defined by faros
+  backfill: {
+    type: 'boolean',
+    title: 'Backfill',
+    description:
+      "Backfill data from the start date to the end date (won't update the current stream state).",
+    default: false,
+    order: 998,
+  },
+  compress_state: {
+    type: 'boolean',
+    title: 'Compress State',
+    description: 'Compress the state using base64/gzip encoding.',
+    default: false,
+    order: 999,
+  },
+  // original faros connector properties
   max_stream_failures: {
     // Use a high order to make sure these properties are displayed at the end
     order: 1000,
@@ -177,12 +194,13 @@ const SOURCE_COMMON_PROPERTIES = {
     description: 'Enable debug mode',
     default: false,
   },
-  faros_source_id: {
-    order: 1003,
-    type: 'string',
-    title: 'The source ID',
-    description: 'The ID of the source (aka account)',
-  },
+  // un-needed by neon blue connectors
+  // faros_source_id: {
+  //   order: 1003,
+  //   type: 'string',
+  //   title: 'The source ID',
+  //   description: 'The ID of the source (aka account)',
+  // },
 };
 
 export function addSourceCommonProperties(spec: AirbyteSpec): AirbyteSpec {

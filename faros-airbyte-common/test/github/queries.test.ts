@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import {buildASTSchema, GraphQLSchema, parse, validate} from 'graphql';
+import path from 'path';
 
 import * as sut from '../../src/github/queries';
 import {
@@ -18,7 +19,10 @@ describe('queries', () => {
   // Get the latest schemas here:
   // https://docs.github.com/en/graphql/overview/public-schema
   // and save them into schemas directory:
-  const schemasDir = 'resources/github/schemas/';
+  const schemasDir =
+    // this needs to be defined differently due to jest issue
+    // https://github.com/jestjs/jest/issues/6155
+    path.resolve(__dirname, '../../resources/github/schemas') + '/';
 
   // Load all GitHub GraphQL schemas
   fs.readdirSync(schemasDir).forEach((file) => {
