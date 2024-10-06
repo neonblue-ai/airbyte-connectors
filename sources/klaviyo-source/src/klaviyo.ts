@@ -10,6 +10,8 @@ import {
   CreatedTokens,
   EventsApi,
   FlowsApi,
+  KlaviyoErrorName,
+  KlaviyoTokenError,
   ListsApi,
   MetricsApi,
   OAuthApi,
@@ -23,6 +25,7 @@ import {
 } from 'klaviyo-api';
 import _ from 'lodash';
 import moment, {Moment} from 'moment';
+import throat from 'throat';
 
 type KlaviyoLimiter = Record<
   keyof typeof KLAVIYO_ENDPOINTS,
@@ -339,6 +342,31 @@ export function getKlaviyoOAuthSession(options: {
     options.clientId,
     options.clientSecret,
     new KlaviyoTokenStorage(options.refreshToken)
+  );
+  // limit refresh token requests
+  const originalRefreshTokens = oauthApi.refreshTokens.bind(oauthApi);
+  oauthApi.refreshTokens = throat(
+    1,
+    function (
+      customerIdentifier: string,
+      refreshToken?: string
+    ): Promise<CreatedTokens> {
+      return backOff(
+        () => originalRefreshTokens(customerIdentifier, refreshToken),
+        {
+          startingDelay: 1000,
+          timeMultiple: 2,
+          maxDelay: 30000,
+          numOfAttempts: 10,
+          retry(err: KlaviyoTokenError) {
+            return (
+              err.name === KlaviyoErrorName.refreshError &&
+              err.message.includes('rate_limit_exceeded')
+            );
+          },
+        }
+      );
+    }
   );
   return new OAuthSession(options.refreshToken, oauthApi);
 }
