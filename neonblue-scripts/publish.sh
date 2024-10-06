@@ -109,6 +109,7 @@ EOF
     # Create and push GitHub tag
     TAG_NAME="$connector-$VERSION"
     git commit -am "Release $connector version $VERSION"
+    git push origin
     git tag -a "$TAG_NAME" -m "Release $connector version $VERSION"
     git push origin "$TAG_NAME"
 
