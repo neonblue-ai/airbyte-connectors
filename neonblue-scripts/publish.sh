@@ -49,6 +49,11 @@ publish_connector() {
         return 1
     fi
 
+    # Bump the version in package.json
+    CURRENT_DIR=$(pwd)
+    cd $SCRIPT_DIR/../sources/$connector && npm version patch --no-git-tag-version 
+    cd $CURRENT_DIR
+
     # Extract the version from package.json
     VERSION=$(awk -F '"' '/"version":/ {print $4}' "$PACKAGE_JSON_PATH")
 
@@ -103,6 +108,7 @@ EOF
 
     # Create and push GitHub tag
     TAG_NAME="$connector-$VERSION"
+    git commit -am "Release $connector version $VERSION"
     git tag -a "$TAG_NAME" -m "Release $connector version $VERSION"
     git push origin "$TAG_NAME"
 
