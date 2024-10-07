@@ -10,7 +10,7 @@ import {ApiKeySession} from 'klaviyo-api';
 import VError from 'verror';
 
 import {getKlaviyoOAuthSession, Klaviyo} from './klaviyo';
-import {Events,Profiles} from './streams';
+import {Events, Metrics, Profiles} from './streams';
 import {KlaviyoConfig} from './types';
 
 function getKlaviyoClient(config: KlaviyoConfig) {
@@ -61,6 +61,7 @@ export class KlaviyoSource extends AirbyteSourceBase<KlaviyoConfig> {
     return [
       new Profiles(this.logger, config, client),
       new Events(this.logger, config, client),
+      new Metrics(this.logger, config, client),
     ];
   }
 }
