@@ -364,6 +364,29 @@ describe('index', () => {
       }
     );
   }, 1000000);
+
+  test('streams - metrics', async () => {
+    await testStream(
+      'metrics',
+      {
+        id: 'HHYjhK',
+        name: 'Clicked Email',
+        created: '2017-07-14T19:35:45+00:00',
+        updated: '2017-07-14T19:35:45+00:00',
+        integration: {
+          object: 'integration',
+          id: '0rG4eQ',
+          key: 'klaviyo',
+          name: 'Klaviyo',
+          category: 'Internal',
+        },
+        account_id: 'M8RPxA',
+      },
+      {
+        cutoff: 1500060945000,
+      }
+    );
+  }, 1000000);
 });
 
 function readResourceFile(fileName: string): any {
