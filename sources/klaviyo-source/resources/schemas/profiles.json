@@ -43,12 +43,12 @@
       "description": "URL pointing to the location of a profile image"
     },
     "created": {
-      "type": ["string", "null"],
+      "type": "string",
       "format": "date-time",
       "description": "Date and time when the profile was created, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)"
     },
     "updated": {
-      "type": ["string", "null"],
+      "type": "string",
       "format": "date-time",
       "description": "Date and time when the profile was last updated, in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)"
     },
@@ -64,6 +64,9 @@
     "properties": {
       "type": ["object", "null"],
       "description": "An object containing key/value pairs for any custom properties assigned to this profile"
+    },
+    "account_id": {
+      "type": "string"
     }
   }
 }

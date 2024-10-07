@@ -1,58 +1,57 @@
 import {SyncMode} from 'faros-airbyte-cdk';
-import {ProfileResponseObjectResourceExtendedAttributes} from 'klaviyo-api';
+import {EventResponseObjectResourceAttributes} from 'klaviyo-api';
 import _ from 'lodash';
 import moment from 'moment';
 import {Dictionary} from 'ts-essentials';
 
 import {KlaviyoStream, momentRanges} from './klaviyo';
 
-type ProfileRecord = {
+type EventRecord = {
   id: string;
+  profile_id: string;
+  metric_id: string;
   account_id: string;
-} & ProfileResponseObjectResourceExtendedAttributes;
+} & EventResponseObjectResourceAttributes;
 
-type ProfileStreamState = {
+type EventStreamState = {
   cutoff: number;
 };
 
-export class Profiles extends KlaviyoStream {
+export class Events extends KlaviyoStream {
   getJsonSchema(): Dictionary<any, string> {
-    return require('../../resources/schemas/profiles.json');
+    return require('../../resources/schemas/events.json');
   }
 
-  get primaryKey(): keyof ProfileRecord {
+  get primaryKey(): keyof EventRecord {
     return 'id';
   }
 
-  get cursorField(): Extract<keyof ProfileRecord, 'created' | 'updated'>[] {
-    return ['updated', 'created'];
+  get cursorField(): Extract<keyof EventRecord, 'datetime'>[] {
+    return ['datetime'];
   }
 
   get realCursorField() {
-    return this.config.initialize ? this.cursorField[1] : this.cursorField[0];
+    return this.cursorField[0];
   }
 
   async *readRecords(
     syncMode: SyncMode,
     cursorField?: string[],
     streamSlice?: Dictionary<string, any>,
-    streamState?: ProfileStreamState
+    streamState?: EventStreamState
   ) {
-    const accountId = await this.client.withRetry(() =>
-      this.client.getAccountId()
-    );
+    const accountId = await this.client.getAccountId();
     this.logger.info(
       `Read records with: ${JSON.stringify({syncMode, cursorField, streamSlice, streamState})}`
     );
     let lastCutoff: number = streamState?.cutoff ?? 0;
     if (!lastCutoff || syncMode === SyncMode.FULL_REFRESH) {
       const firstItem = await this.client.withRetry(() =>
-        this.client.profiles.getProfiles({
+        this.client.events.getEvents({
           sort: this.realCursorField,
-          pageSize: 1,
         })
       );
-      lastCutoff = _.first(firstItem.body.data)?.attributes.created.getTime();
+      lastCutoff = _.first(firstItem.body.data)?.attributes.datetime.getTime();
     }
     this.logger.info(`Last cutoff: ${lastCutoff}`);
     const ranges = momentRanges({
@@ -64,7 +63,7 @@ export class Profiles extends KlaviyoStream {
     });
     yield* this.parallelSequentialRead(
       {
-        parallel: 10,
+        parallel: 20,
       },
       ranges,
       async function* ({from, to}) {
@@ -72,7 +71,7 @@ export class Profiles extends KlaviyoStream {
         this.logger.info(
           `Fetching ${this.realCursorField} from ${from.toISOString()} to ${to.toISOString()}`
         );
-        for await (const items of this.client.getProfiles({
+        for await (const items of this.client.getEvents({
           sort: this.realCursorField,
           filter: `and(greater-than(${this.realCursorField},${from
             .toISOString()
@@ -87,6 +86,8 @@ export class Profiles extends KlaviyoStream {
               yield {
                 id: item.id,
                 ..._.mapKeys(item.attributes, (v, k) => _.snakeCase(k)),
+                metric_id: item.relationships?.metric?.data?.id,
+                profile_id: item.relationships?.profile?.data?.id,
                 account_id: accountId,
               };
             }
@@ -101,13 +102,10 @@ export class Profiles extends KlaviyoStream {
   }
 
   getUpdatedState(
-    currentStreamState: ProfileStreamState,
-    latestRecord: ProfileRecord,
+    currentStreamState: EventStreamState,
+    latestRecord: EventRecord,
     streamSlice?: Dictionary<string, any>
-  ): ProfileStreamState {
-    this.logger.info(
-      `getUpdateState with: ${JSON.stringify({currentStreamState, latestRecord, streamSlice})}`
-    );
+  ): EventStreamState {
     return {
       cutoff: Math.max(
         currentStreamState?.cutoff ?? 0,

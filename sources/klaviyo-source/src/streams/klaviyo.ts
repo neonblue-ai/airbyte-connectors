@@ -1,12 +1,40 @@
 import {AirbyteLogger, AirbyteStreamBase} from 'faros-airbyte-cdk';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
+import moment from 'moment';
 import {Transform, TransformCallback, TransformOptions} from 'stream';
 import throat from 'throat';
 import tmp from 'tmp';
 
 import {Klaviyo} from '../klaviyo';
 import {KlaviyoConfig} from '../types';
+
+export function momentRanges(options: {
+  from: moment.Moment;
+  to?: moment.Moment;
+  step: moment.Duration;
+  stepOverlap?: moment.Duration;
+  startOverlap?: moment.Duration;
+}) {
+  const {
+    from,
+    to = moment.utc(),
+    step,
+    stepOverlap = moment.duration(0),
+    startOverlap = moment.duration(0),
+  } = options;
+  const ranges: Array<{from: moment.Moment; to: moment.Moment}> = [];
+  const isFirst = false;
+  for (let d = moment.utc(from.clone()); d.isBefore(to); ) {
+    const a = d.clone();
+    const b = d.add(step).clone();
+    ranges.push({
+      from: isFirst ? a.subtract(startOverlap) : a.subtract(stepOverlap),
+      to: b.add(stepOverlap),
+    });
+  }
+  return ranges;
+}
 
 class BufferedJsonTransform extends Transform {
   private buffer: string = '';
@@ -197,6 +225,7 @@ class FileBufferedProcessor<T> {
 
 export abstract class KlaviyoStream extends AirbyteStreamBase {
   public readonly controller: AbortController = new AbortController();
+  private ids = new Set<string>();
 
   constructor(
     logger: AirbyteLogger,
@@ -207,6 +236,14 @@ export abstract class KlaviyoStream extends AirbyteStreamBase {
     logger.info(
       `Initialized ${this.name} stream with config: ${JSON.stringify(config)}`
     );
+  }
+
+  shouldEmit(id: string) {
+    const seen = this.ids.has(id);
+    if (!seen) {
+      this.ids.add(id);
+    }
+    return !seen;
   }
 
   async *parallelSequentialRead<T, U, V extends this>(
