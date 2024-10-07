@@ -1,6 +1,6 @@
 {
   "name": "klaviyo-source",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "Example Klaviyo source",
   "keywords": [
     "airbyte",
