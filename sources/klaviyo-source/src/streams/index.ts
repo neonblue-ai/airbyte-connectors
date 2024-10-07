@@ -1,3 +1,4 @@
+import {Events} from './events';
 import {Profiles} from './profiles';
 
-export {Profiles};
+export {Profiles, Events};
