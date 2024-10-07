@@ -24,7 +24,7 @@ export class Metrics extends KlaviyoStream {
   }
 
   get cursorField() {
-    return undefined;
+    return [];
   }
 
   async *readRecords(
