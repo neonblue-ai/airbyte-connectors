@@ -25,8 +25,8 @@ export class AirbyteSourceLogger extends AirbyteLogger {
     this._getState = getState;
   }
 
-  override write(msg: AirbyteMessage): void {
-    super.write(msg);
+  override write(msg: AirbyteMessage): boolean {
+    const ok = super.write(msg);
 
     if (isAirbyteLog(msg) && shouldWriteLog(msg, this.level)) {
       const sourceLog: AirbyteSourceLog = {
@@ -41,19 +41,22 @@ export class AirbyteSourceLogger extends AirbyteLogger {
       this.batch.push(sourceLog);
       this.totalSize += JSON.stringify(sourceLog).length;
       if (this.totalSize > MAX_BATCH_SIZE_KB && this._getState) {
-        this.flush();
+        return this.flush() && ok;
       }
     }
+
+    return ok;
   }
 
-  flush(): void {
+  flush(): boolean {
     if (!this.batch.length || !this._getState) {
-      return;
+      return true;
     }
-    super.write(
+    const ok = super.write(
       new AirbyteSourceLogsMessage({data: this._getState()}, this.batch)
     );
     this.batch.length = 0; // clears the array
     this.totalSize = 0;
+    return ok;
   }
 }

@@ -2,21 +2,27 @@
   "streams": [
     {
       "stream": {
-        "name": "builds",
-        "json_schema": {},
-        "supported_sync_modes": [
-          "full_refresh",
-          "incremental"
-        ],
+        "name": "events",
+        "json_schema": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "timestamp": {"type": "number"},
+            "event_properties": {"type": "object"},
+            "datetime": {"type": "string", "format": "date-time"},
+            "uuid": {"type": "string"},
+            "profile_id": {"type": "string"},
+            "metric_id": {"type": "string"},
+            "attribution_ids": {"type": "array", "items": {"type": "string"}},
+            "account_id": {"type": "string"}
+          },
+          "required": ["account_id"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "supported_sync_modes": ["full_refresh", "incremental"],
         "source_defined_cursor": true,
-        "source_defined_primary_key": [
-          [
-            "uid"
-          ],
-          [
-            "source"
-          ]
-        ]
+        "default_cursor_field": ["datetime"],
+        "source_defined_primary_key": [["id"]]
       },
       "sync_mode": "full_refresh",
       "destination_sync_mode": "overwrite"
