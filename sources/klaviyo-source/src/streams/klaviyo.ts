@@ -59,39 +59,6 @@ export function momentRanges(options: {
   return ranges;
 }
 
-class BufferedJsonTransform extends Transform {
-  private buffer: string = '';
-  private bufferSize: number;
-
-  constructor(options: TransformOptions & {bufferSize?: number} = {}) {
-    const {bufferSize, ...opts} = options;
-    super({
-      ...opts,
-      encoding: 'utf-8',
-      objectMode: true,
-    });
-    this.bufferSize = bufferSize ?? 0;
-  }
-
-  _transform(chunk: any, encoding: string, next: TransformCallback) {
-    const stringified = JSON.stringify(chunk);
-    this.buffer += stringified;
-    this.buffer += '\n';
-    if (this.buffer.length >= this.bufferSize) {
-      this.push(this.buffer);
-      this.buffer = '';
-    }
-    next();
-  }
-
-  _flush(next: TransformCallback) {
-    if (this.buffer.length > 0) {
-      this.push(this.buffer);
-    }
-    next();
-  }
-}
-
 class FileBufferedProcessor<T> {
   controller: AbortController;
   bufferFile = tmp.tmpNameSync({postfix: '.json'});
@@ -100,7 +67,7 @@ class FileBufferedProcessor<T> {
   isProcessing = false;
 
   private writeWorker: Promise<void> | undefined;
-  private writeBufferLimit = 64 * 1024;
+  private writeBufferLimit = 128 * 1024;
   private readBufferLimit = 512 * 1024;
 
   constructor(
@@ -110,6 +77,7 @@ class FileBufferedProcessor<T> {
     }
   ) {
     this.controller = options.controller;
+    this.touchBuffer = throat(1, this.touchBuffer);
   }
 
   get worker() {
@@ -119,13 +87,12 @@ class FileBufferedProcessor<T> {
   /**
    * Gets a unique file descriptor for reading from the buffer file.
    */
-  async getReadFd() {
+  async touchBuffer() {
     try {
       await fsPromises.access(this.bufferFile, fs.constants.F_OK);
     } catch {
       await fsPromises.writeFile(this.bufferFile, '');
     }
-    return await fsPromises.open(this.bufferFile, 'r');
   }
 
   async start() {
@@ -133,28 +100,38 @@ class FileBufferedProcessor<T> {
     if (this.writeWorker) {
       throw new Error('Already started.');
     }
+    await this.touchBuffer();
     this.writeWorker = new Promise<void>((resolve, reject) => {
-      const file = fs
+      const writer = fs
         .createWriteStream(this.bufferFile, {
           encoding: 'utf-8',
           flags: 'a',
+          highWaterMark: this.writeBufferLimit,
         })
-        .on('error', reject)
+        .on('error', (err) => {
+          reject(err);
+        })
         .on('close', () => {
           this.writeWorker = undefined;
           this.isDone = true;
           resolve();
         });
-      const writer = new BufferedJsonTransform({
-        bufferSize: this.writeBufferLimit,
-      });
-      writer.pipe(file);
-      // start the generator in a separate async function to avoid blocking the main thread
+      let buffer = '';
+      const flush = async () => {
+        const ok = writer.write(buffer);
+        buffer = '';
+        if (!ok) {
+          await new Promise<void>((resolve) => writer.once('drain', resolve));
+        }
+      };
       (async () => {
         try {
           for await (const value of this.generator) {
             this.controller.signal.throwIfAborted();
-            writer.write(value);
+            buffer += JSON.stringify(value) + '\n';
+            if (Buffer.byteLength(buffer) >= 1024) {
+              await flush();
+            }
           }
         } catch (e: any) {
           if (e.name !== 'AbortError') {
@@ -162,7 +139,10 @@ class FileBufferedProcessor<T> {
             reject(e);
           }
         } finally {
-          writer.end();
+          await new Promise<void>((resolve) => {
+            writer.end(buffer, resolve);
+            buffer = '';
+          });
         }
       })();
     });
@@ -177,7 +157,8 @@ class FileBufferedProcessor<T> {
     this.isProcessing = true;
 
     // get read handle
-    const fd = await this.getReadFd();
+    await this.touchBuffer();
+    const fd = await fsPromises.open(this.bufferFile, 'r');
 
     // setup file watcher
     const watcher = fs.watch(this.bufferFile, {

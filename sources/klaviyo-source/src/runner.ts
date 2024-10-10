@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 
 import {KlaviyoSource} from './index';
+import {KlaviyoStream} from './streams/klaviyo';
 
 (async () => {
   const streamName = process.argv[2];
@@ -14,7 +15,7 @@ import {KlaviyoSource} from './index';
   const total = Number(process.argv[4] ?? '0');
   console.log({streamName, state, total});
 
-  const logger = new AirbyteSourceLogger(AirbyteLogLevel.FATAL);
+  const logger = new AirbyteSourceLogger(AirbyteLogLevel.INFO);
   const source = new KlaviyoSource(logger);
   const config = JSON.parse(
     fs.readFileSync(
@@ -22,7 +23,9 @@ import {KlaviyoSource} from './index';
       'utf8'
     )
   );
-  const stream = source.streams(config).find((s) => s.name === streamName);
+  const stream: KlaviyoStream = source
+    .streams(config)
+    .find((s) => s.name === streamName) as any;
 
   let n = 0;
   if (stream) {
@@ -35,7 +38,10 @@ import {KlaviyoSource} from './index';
       if (n % 10000 === 0) {
         console.log(`Record ${n} / ${total}`, JSON.stringify(record));
       }
-      if (total > 0 && n >= total) break;
+      if (total > 0 && n >= total) {
+        console.log(`ABORTING: Record ${n} / ${total}`);
+        stream.controller.abort();
+      }
       n++;
     }
   }
