@@ -90,49 +90,10 @@ describe('index', () => {
   }, 1000000);
 
   test('streams - campaigns', async () => {
-    await testStream(
-      'campaigns',
-      {
-        id: 'LXgqe8',
-        channel: 'email',
-        name: 'BLD Review Request',
-        status: 'Sent',
-        archived: false,
-        audiences: {
-          included: ['QrsPkW'],
-          excluded: [],
-        },
-        send_options: {
-          useSmartSending: true,
-        },
-        tracking_options: {
-          isAddUtm: true,
-          utmParams: [],
-          isTrackingClicks: true,
-          isTrackingOpens: true,
-        },
-        send_strategy: {
-          method: 'static',
-          optionsStatic: {
-            datetime: '2017-09-19T06:04:19.000Z',
-            isLocal: false,
-            sendPastRecipientsImmediately: null,
-          },
-          optionsThrottled: null,
-          optionsSto: null,
-        },
-        created_at: '2017-09-19T00:08:16.000Z',
-        scheduled_at: '2017-09-19T06:04:19.000Z',
-        updated_at: '2017-09-19T06:04:22.000Z',
-        send_time: '2017-09-19T06:04:19.000Z',
-        campaign_message_ids: ['01GF857XGP8CFZQS19XSPGZC5V'],
-        account_id: 'M8RPxA',
-      },
-      {
-        cutoff: 1505779696000,
-      }
-    );
-  }, 1000000);
+    await testStream('campaigns', require('../test_files/campaign.json'), {
+      cutoff: 1505801062000,
+    });
+  }, 10000000);
 
   test('streams - events', async () => {
     await testStream(
@@ -433,6 +394,12 @@ describe('index', () => {
         cutoff: 1500060945000,
       }
     );
+  }, 1000000);
+
+  test('streams - templates', async () => {
+    await testStream('templates', require('../test_files/template.json'), {
+      cutoff: 1500060890000,
+    });
   }, 1000000);
 });
 

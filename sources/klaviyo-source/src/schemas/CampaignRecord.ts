@@ -15,4 +15,6 @@ export const CampaignRecord = z.object({
   send_time: z.string().datetime({offset: true}).optional(),
   campaign_message_ids: z.array(z.string()).optional(),
   tag_ids: z.array(z.string()).optional(),
+  campaign_messages: z.array(z.any()).optional(),
+  tags: z.array(z.string()).optional(),
 });
