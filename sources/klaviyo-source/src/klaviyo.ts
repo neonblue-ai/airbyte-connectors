@@ -75,16 +75,14 @@ export class Klaviyo {
       startingDelay: 30 * 1000,
       timeMultiple: 2,
       retry(e: AxiosError) {
-        return (
-          e.response?.status === 429 ||
-          e.response?.status === 503 ||
-          e.response?.status === 500 ||
-          // this one is questionable -- not sure if expired tokens are managed
-          // by the api before being returned to the client
-          e.response?.status === 401
-        );
+        return e.response?.status !== 400;
       },
     });
+  }
+
+  toDatetimeFilterString(d: Moment | number | Date) {
+    const m = moment.isMoment(d) ? d.clone().utc() : moment.utc(d);
+    return m.format('YYYY-MM-DDTHH:mm:ss') + 'Z';
   }
 
   private async *fetchAll<P>(
