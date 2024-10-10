@@ -125,7 +125,10 @@ export class AirbyteSourceRunner<Config extends AirbyteConfig> extends Runner {
               clonedState
             );
             for await (const message of iter) {
-              this.logger.write(message);
+              const ok = this.logger.write(message);
+              if (!ok) {
+                await this.logger.withForDrain();
+              }
             }
             await this.source.onAfterRead(config);
           } catch (e: any) {

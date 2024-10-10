@@ -51,8 +51,8 @@ export class AirbyteLogger {
     this.write(AirbyteTrace.make(error, failure_type));
   }
 
-  write(msg: AirbyteMessage): void {
-    writeMessage(msg, this.level);
+  write(msg: AirbyteMessage): boolean {
+    return writeMessage(msg, this.level);
   }
 
   /**
@@ -78,6 +78,12 @@ export class AirbyteLogger {
     const logger: Logger<string> = pino({level}, destination);
     return logger;
   }
+
+  async withForDrain(): Promise<void> {
+    return new Promise((resolve) => {
+      process.stdout.once('drain', resolve);
+    });
+  }
 }
 
 export function shouldWriteLog(
@@ -87,12 +93,12 @@ export function shouldWriteLog(
   return AirbyteLogLevelOrder(msg.log.level) >= AirbyteLogLevelOrder(level);
 }
 
-function writeMessage(msg: AirbyteMessage, level: AirbyteLogLevel): void {
+function writeMessage(msg: AirbyteMessage, level: AirbyteLogLevel): boolean {
   if (
     msg.type === AirbyteMessageType.LOG &&
     !shouldWriteLog(msg as AirbyteLog, level)
   ) {
-    return;
+    return true;
   }
 
   let message: AirbyteMessage;
@@ -109,7 +115,8 @@ function writeMessage(msg: AirbyteMessage, level: AirbyteLogLevel): void {
       break;
   }
 
-  console.log(JSON.stringify(message));
+  return process.stdout.write(JSON.stringify(message) + '\n');
+  // console.log(JSON.stringify(message));
 }
 
 // When running on Airbyte, we log the message as info regardless of the log level
