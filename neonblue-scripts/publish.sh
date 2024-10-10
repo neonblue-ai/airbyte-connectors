@@ -4,7 +4,7 @@
 CONNECTORS=("klaviyo-source")
 
 # Configuration
-REMOTE_HOST="nbservices" # Neon Blue Airbyte host
+REMOTE_HOST="services.neonblue" # Neon Blue Airbyte host
 
 # Function to check for a clean working branch
 check_clean_branch() {
@@ -38,7 +38,7 @@ publish_connector() {
     echo "Publishing connector: $connector"
 
     # Get the directory of the script
-    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
     # Path to package.json relative to the script location
     PACKAGE_JSON_PATH="$SCRIPT_DIR/../sources/$connector/package.json"
@@ -51,7 +51,7 @@ publish_connector() {
 
     # Bump the version in package.json
     CURRENT_DIR=$(pwd)
-    cd $SCRIPT_DIR/../sources/$connector && npm version patch --no-git-tag-version 
+    cd $SCRIPT_DIR/../sources/$connector && npm version patch --no-git-tag-version
     cd $CURRENT_DIR
 
     # Extract the version from package.json
@@ -93,7 +93,7 @@ publish_connector() {
 
     # Run remote commands
     echo "Running remote commands on $REMOTE_HOST..."
-    ssh $REMOTE_HOST << EOF
+    ssh $REMOTE_HOST <<EOF
         set -e
         docker pull $image:latest
         kind load docker-image $image:latest --name airbyte-abctl
@@ -118,7 +118,7 @@ EOF
 
 # Function to check if we're in a git repository
 check_git_repo() {
-    if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         echo "Error: This script must be run from within a Git repository."
         exit 1
     fi
