@@ -290,13 +290,26 @@ export abstract class KlaviyoStream extends AirbyteStreamBase {
 
     // stream sequentially
     try {
-      for (let stream = streams.shift(); stream; stream = streams.shift()) {
+      const n = streams.length;
+      for (let i = 0; i < n; i++) {
+        const stream = streams.shift();
+        const streamDedupe = dedupe && i < n - 1;
+        const nextStreamCutoff =
+          i < n - 1 && args[i + 1].from
+            ? args[i + 1].from.clone().subtract(2, 'minute')
+            : undefined;
         this.controller.signal.throwIfAborted();
         for await (const item of stream.process()) {
           this.controller.signal.throwIfAborted();
           if (dedupe) {
-            // TODO: narrow the number of current ids stored by examining the chunk's from field
-            this.currentIds.add(item[this.primaryKey]);
+            if (
+              streamDedupe &&
+              (!nextStreamCutoff ||
+                !item[cursorField] ||
+                moment.utc(item[cursorField]).isAfter(nextStreamCutoff))
+            ) {
+              this.currentIds.add(item[this.primaryKey]);
+            }
             if (this.lastIds.has(item[this.primaryKey])) {
               continue;
             }
