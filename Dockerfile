@@ -2,7 +2,7 @@ FROM node:18-alpine
 
 WORKDIR /home/node/airbyte
 
-COPY lerna.json .tsconfig.json package.json package-lock.json ./
+COPY lerna.json .tsconfig.json package.json ./
 # RUN sed -i "/jest\|mockttp/d" package.json
 COPY ./faros-airbyte-cdk ./faros-airbyte-cdk
 COPY ./faros-airbyte-common ./faros-airbyte-common
