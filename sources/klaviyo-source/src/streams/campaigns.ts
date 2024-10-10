@@ -28,7 +28,7 @@ export class Campaigns extends KlaviyoStream {
   }
 
   get cursorField(): Extract<keyof Record, 'created_at' | 'updated_at'> {
-    return this.config.initialize ? 'created_at' : 'updated_at';
+    return 'updated_at';
   }
 
   async *readRecords(
@@ -48,18 +48,43 @@ export class Campaigns extends KlaviyoStream {
     if (!lastCutoff || syncMode === SyncMode.FULL_REFRESH) {
       lastCutoff = new Date('2000-01-01').getTime();
     }
+    lastCutoff = moment
+      .utc(lastCutoff)
+      .subtract(moment.duration(1, 'hour'))
+      .toDate()
+      .getTime();
     this.logger.info(`Last cutoff: ${lastCutoff}`);
     for (const channel of ['email', 'sms']) {
       for await (const items of this.client.getCampaigns(
         [
           `equals(messages.channel,'${channel}')`,
-          `greater-or-equal(updated_at,${this.client.toDatetimeFilterString(lastCutoff)})`,
+          `equals(status,'Sent')`,
+          `greater-or-equal(${this.cursorField},${this.client.toDatetimeFilterString(lastCutoff)})`,
         ].join(','),
         {
           sort: this.cursorField,
         }
       )) {
-        for (const item of items) {
+        const childItems = items.map((item, i) => {
+          return Promise.all([
+            this.client.withLimiter(
+              'GET:/campaigns/{id}/campaign-messages/',
+              () => {
+                this.controller.signal.throwIfAborted();
+                return this.client.campaigns.getCampaignCampaignMessages(
+                  item.id
+                );
+              }
+            ),
+            this.client.withLimiter('GET:/campaigns/{id}/tags/', () => {
+              this.controller.signal.throwIfAborted();
+              return this.client.campaigns.getCampaignTags(item.id);
+            }),
+          ]);
+        });
+        for (let j = 0; j < items.length; j++) {
+          const item = items[j];
+          const [messages, tags] = await childItems[j];
           yield {
             id: item.id,
             channel,
@@ -68,6 +93,12 @@ export class Campaigns extends KlaviyoStream {
               item.relationships?.campaignMessages?.data?.map((i) => i.id),
             tag_ids: item?.relationships?.tags?.data?.map((i) => i.id),
             account_id: accountId,
+            campaign_messages: messages.body.data.map((m) => ({
+              id: m.id,
+              ...m.attributes,
+              template_id: m.relationships?.template?.data?.id,
+            })),
+            tags: tags.body.data.map((t) => t.attributes.name),
           } as Record;
         }
       }

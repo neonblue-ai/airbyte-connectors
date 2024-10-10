@@ -80,6 +80,13 @@ export class Klaviyo {
     });
   }
 
+  async withLimiter<T>(
+    endpoint: keyof typeof KLAVIYO_ENDPOINTS,
+    fn: () => Promise<T>
+  ) {
+    return this.withRetry(() => this.limiters[endpoint](fn));
+  }
+
   toDatetimeFilterString(d: Moment | number | Date) {
     const m = moment.isMoment(d) ? d.clone().utc() : moment.utc(d);
     return m.format('YYYY-MM-DDTHH:mm:ss') + 'Z';

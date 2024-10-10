@@ -66,7 +66,7 @@ export class Events extends KlaviyoStream {
     });
     yield* this.parallelSequentialRead(
       {
-        parallel: 20,
+        parallel: 10,
         dedupe: true,
       },
       ranges,
