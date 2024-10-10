@@ -10,8 +10,11 @@ import {KlaviyoSource} from './index';
 
 (async () => {
   const streamName = process.argv[2];
-  const total = Number(process.argv[3] ?? '1');
-  const logger = new AirbyteSourceLogger(AirbyteLogLevel.INFO);
+  const state = process.argv[3] ? JSON.parse(process.argv[3]) : {};
+  const total = Number(process.argv[4] ?? '0');
+  console.log({streamName, state, total});
+
+  const logger = new AirbyteSourceLogger(AirbyteLogLevel.FATAL);
   const source = new KlaviyoSource(logger);
   const config = JSON.parse(
     fs.readFileSync(
@@ -27,10 +30,13 @@ import {KlaviyoSource} from './index';
       SyncMode.INCREMENTAL,
       undefined,
       undefined,
-      {}
+      state
     )) {
-      console.log(`Record ${n++} / ${total}`, JSON.stringify(record));
+      if (n % 10000 === 0) {
+        console.log(`Record ${n} / ${total}`, JSON.stringify(record));
+      }
       if (total > 0 && n >= total) break;
+      n++;
     }
   }
 })();

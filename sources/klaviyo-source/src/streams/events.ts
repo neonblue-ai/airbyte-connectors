@@ -66,7 +66,7 @@ export class Events extends KlaviyoStream {
     });
     yield* this.parallelSequentialRead(
       {
-        parallel: 10,
+        parallel: 20,
         dedupe: true,
       },
       ranges,
@@ -99,10 +99,6 @@ export class Events extends KlaviyoStream {
         }
       }
     );
-  }
-
-  get stateCheckpointInterval(): number | undefined {
-    return 100000;
   }
 
   getUpdatedState(
