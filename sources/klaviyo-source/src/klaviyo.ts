@@ -40,6 +40,7 @@ axios.defaults.httpsAgent = new https.Agent({
   maxSockets: 50,
 });
 axios.defaults.adapter = 'http';
+axios.defaults.maxRedirects = 0; // https://github.com/axios/axios/issues/1045
 
 type KlaviyoLimiter = Record<
   keyof typeof KLAVIYO_ENDPOINTS,
