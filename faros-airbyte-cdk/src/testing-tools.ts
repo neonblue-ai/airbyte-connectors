@@ -1,3 +1,5 @@
+import 'jest';
+
 import fs from 'fs';
 import {Dictionary} from 'ts-essentials';
 

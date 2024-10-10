@@ -5,18 +5,26 @@ AirbyteSpec {
   "spec": Object {
     "connectionSpecification": Object {
       "properties": Object {
+        "backfill": Object {
+          "default": false,
+          "description": "Backfill data from the start date to the end date (won't update the current stream state).",
+          "order": 998,
+          "title": "Backfill",
+          "type": "boolean",
+        },
+        "compress_state": Object {
+          "default": false,
+          "description": "Compress the state using base64/gzip encoding.",
+          "order": 999,
+          "title": "Compress State",
+          "type": "boolean",
+        },
         "debug": Object {
           "default": false,
           "description": "Enable debug mode",
           "order": 1002,
           "title": "Debug",
           "type": "boolean",
-        },
-        "faros_source_id": Object {
-          "description": "The ID of the source (aka account)",
-          "order": 1003,
-          "title": "The source ID",
-          "type": "string",
         },
         "max_slice_failures": Object {
           "default": 0,

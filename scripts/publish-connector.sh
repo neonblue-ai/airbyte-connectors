@@ -11,8 +11,17 @@ connector_version=$2
 
 [[ "${connector_path}" != */ ]] && connector_path="${connector_path}/"
 
-org="farosai"
-connector_name="$(echo $connector_path | cut -f2 -d'/')"
+org="neonblueai"
+original_connector_name="$(echo $connector_path | cut -f2 -d'/')"
+
+# Transform connector name from {some-name}-source to source-{some-name}-ts
+if [[ "$original_connector_name" == *-source ]]; then
+  base_name="${original_connector_name%-source}"
+  connector_name="source-${base_name}-js"
+else
+  connector_name="$original_connector_name"
+fi
+
 prefix="airbyte-"
 if [[ "$connector_name" = $prefix* ]]; then
   image="$org/$connector_name"
