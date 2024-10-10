@@ -1,8 +1,11 @@
 import {URL} from 'node:url';
 
 import {AxiosError} from 'axios';
+import axios from 'axios';
 import Bottleneck from 'bottleneck';
 import {backOff} from 'exponential-backoff';
+import http from 'http';
+import https from 'https';
 import {
   AccountsApi,
   CampaignsApi,
@@ -26,6 +29,17 @@ import {
 import _ from 'lodash';
 import moment, {Moment} from 'moment';
 import throat from 'throat';
+
+// set some axios globals to ease memory issues
+axios.defaults.httpAgent = new http.Agent({
+  keepAlive: true,
+  maxSockets: 50,
+});
+axios.defaults.httpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 50,
+});
+axios.defaults.adapter = 'http';
 
 type KlaviyoLimiter = Record<
   keyof typeof KLAVIYO_ENDPOINTS,
