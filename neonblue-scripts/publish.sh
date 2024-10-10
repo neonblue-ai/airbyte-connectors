@@ -6,6 +6,17 @@ CONNECTORS=("klaviyo-source")
 # Configuration
 REMOTE_HOST="services.neonblue" # Neon Blue Airbyte host
 
+# Parse arguments
+NO_PUBLISH=false
+for arg in "$@"; do
+    case $arg in
+    --no-publish)
+        NO_PUBLISH=true
+        shift
+        ;;
+    esac
+done
+
 # Function to check for a clean working branch
 check_clean_branch() {
     if ! git diff-index --quiet HEAD --; then
@@ -49,21 +60,25 @@ publish_connector() {
         return 1
     fi
 
-    # Bump the version in package.json
-    CURRENT_DIR=$(pwd)
-    cd $SCRIPT_DIR/../sources/$connector && npm version patch --no-git-tag-version
-    cd $CURRENT_DIR
+    if [ "$NO_PUBLISH" = false ]; then
+        # Bump the version in package.json
+        CURRENT_DIR=$(pwd)
+        cd $SCRIPT_DIR/../sources/$connector && npm version patch --no-git-tag-version
+        cd $CURRENT_DIR
 
-    # Extract the version from package.json
-    VERSION=$(awk -F '"' '/"version":/ {print $4}' "$PACKAGE_JSON_PATH")
+        # Extract the version from package.json
+        VERSION=$(awk -F '"' '/"version":/ {print $4}' "$PACKAGE_JSON_PATH")
 
-    # Check if VERSION is empty
-    if [ -z "$VERSION" ]; then
-        echo "Error: Could not extract version from package.json for $connector"
-        return 1
+        # Check if VERSION is empty
+        if [ -z "$VERSION" ]; then
+            echo "Error: Could not extract version from package.json for $connector"
+            return 1
+        fi
+
+        echo "Extracted version: $VERSION"
+    else
+        echo "Skipping version bump and GitHub tag creation due to --no-publish flag."
     fi
-
-    echo "Extracted version: $VERSION"
 
     # Publish the connector using the script
     $SCRIPT_DIR/../scripts/publish-connector.sh sources/$connector $VERSION
@@ -106,14 +121,16 @@ EOF
 
     echo "Remote commands executed successfully on $REMOTE_HOST."
 
-    # Create and push GitHub tag
-    TAG_NAME="$connector-$VERSION"
-    git commit -am "Release $connector version $VERSION"
-    git push origin
-    git tag -a "$TAG_NAME" -m "Release $connector version $VERSION"
-    git push origin "$TAG_NAME"
+    if [ "$NO_PUBLISH" = false ]; then
+        # Create and push GitHub tag
+        TAG_NAME="$connector-$VERSION"
+        git commit -am "Release $connector version $VERSION"
+        git push origin
+        git tag -a "$TAG_NAME" -m "Release $connector version $VERSION"
+        git push origin "$TAG_NAME"
 
-    echo "Created and pushed GitHub tag: $TAG_NAME"
+        echo "Created and pushed GitHub tag: $TAG_NAME"
+    fi
 }
 
 # Function to check if we're in a git repository
