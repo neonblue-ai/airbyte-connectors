@@ -65,20 +65,20 @@ publish_connector() {
         CURRENT_DIR=$(pwd)
         cd $SCRIPT_DIR/../sources/$connector && npm version patch --no-git-tag-version
         cd $CURRENT_DIR
-
-        # Extract the version from package.json
-        VERSION=$(awk -F '"' '/"version":/ {print $4}' "$PACKAGE_JSON_PATH")
-
-        # Check if VERSION is empty
-        if [ -z "$VERSION" ]; then
-            echo "Error: Could not extract version from package.json for $connector"
-            return 1
-        fi
-
-        echo "Extracted version: $VERSION"
     else
         echo "Skipping version bump and GitHub tag creation due to --no-publish flag."
     fi
+
+    # Extract the version from package.json
+    VERSION=$(awk -F '"' '/"version":/ {print $4}' "$PACKAGE_JSON_PATH")
+
+    # Check if VERSION is empty
+    if [ -z "$VERSION" ]; then
+        echo "Error: Could not extract version from package.json for $connector"
+        return 1
+    fi
+
+    echo "Extracted version: $VERSION"
 
     # Publish the connector using the script
     $SCRIPT_DIR/../scripts/publish-connector.sh sources/$connector $VERSION
