@@ -1,35 +1,40 @@
 import {SyncMode} from 'faros-airbyte-cdk';
-import {ProfileResponseObjectResourceExtendedAttributes} from 'klaviyo-api';
 import _ from 'lodash';
 import moment from 'moment';
 import {Dictionary} from 'ts-essentials';
+import {z} from 'zod';
 
-import {KlaviyoStream, momentRanges} from './klaviyo';
+import {ProfileRecord} from '../schemas/ProfileRecord';
+import {
+  fromApiRecordAttributes,
+  fromZodType,
+  KlaviyoStream,
+  momentRanges,
+} from './klaviyo';
 
-type ProfileRecord = {
-  id: string;
-  account_id: string;
-} & ProfileResponseObjectResourceExtendedAttributes;
+// record
+const Record = ProfileRecord.extend({
+  account_id: z.string(),
+});
+type Record = z.infer<typeof Record>;
 
+// state
 type ProfileStreamState = {
   cutoff: number;
 };
 
+// stream
 export class Profiles extends KlaviyoStream {
   getJsonSchema(): Dictionary<any, string> {
-    return require('../../resources/schemas/profiles.json');
+    return fromZodType(Record);
   }
 
-  get primaryKey(): keyof ProfileRecord {
+  get primaryKey(): keyof Record {
     return 'id';
   }
 
-  get cursorField(): Extract<keyof ProfileRecord, 'created' | 'updated'>[] {
-    return ['updated', 'created'];
-  }
-
-  get realCursorField() {
-    return this.config.initialize ? this.cursorField[1] : this.cursorField[0];
+  get cursorField(): Extract<keyof Record, 'created' | 'updated'> {
+    return this.config.initialize ? 'created' : 'updated';
   }
 
   async *readRecords(
@@ -48,7 +53,7 @@ export class Profiles extends KlaviyoStream {
     if (!lastCutoff || syncMode === SyncMode.FULL_REFRESH) {
       const firstItem = await this.client.withRetry(() =>
         this.client.profiles.getProfiles({
-          sort: this.realCursorField,
+          sort: this.cursorField,
           pageSize: 1,
         })
       );
@@ -65,31 +70,29 @@ export class Profiles extends KlaviyoStream {
     yield* this.parallelSequentialRead(
       {
         parallel: 10,
+        dedupe: true,
       },
       ranges,
       async function* ({from, to}) {
         this.controller.signal.throwIfAborted();
         this.logger.info(
-          `Fetching ${this.realCursorField} from ${from.toISOString()} to ${to.toISOString()}`
+          `Fetching ${this.cursorField} from ${from.toISOString()} to ${to.toISOString()}`
         );
         for await (const items of this.client.getProfiles({
-          sort: this.realCursorField,
-          filter: `and(greater-than(${this.realCursorField},${from
-            .toISOString()
-            .replace('.000', '')}),less-than(${this.realCursorField},${to
-            .toISOString()
-            .replace('.000', '')}))`,
+          sort: this.cursorField,
+          filter: [
+            `greater-than(${this.cursorField},${this.client.toDatetimeFilterString(from)})`,
+            `less-than(${this.cursorField},${this.client.toDatetimeFilterString(to)})`,
+          ].join(','),
         })) {
           this.controller.signal.throwIfAborted();
           for (const item of items) {
             this.controller.signal.throwIfAborted();
-            if (this.shouldEmit(item.id)) {
-              yield {
-                id: item.id,
-                ..._.mapKeys(item.attributes, (v, k) => _.snakeCase(k)),
-                account_id: accountId,
-              };
-            }
+            yield {
+              id: item.id,
+              ...fromApiRecordAttributes(item.attributes),
+              account_id: accountId,
+            } as Record;
           }
         }
       }
@@ -102,16 +105,13 @@ export class Profiles extends KlaviyoStream {
 
   getUpdatedState(
     currentStreamState: ProfileStreamState,
-    latestRecord: ProfileRecord,
+    latestRecord: Record,
     streamSlice?: Dictionary<string, any>
   ): ProfileStreamState {
-    this.logger.info(
-      `getUpdateState with: ${JSON.stringify({currentStreamState, latestRecord, streamSlice})}`
-    );
     return {
       cutoff: Math.max(
         currentStreamState?.cutoff ?? 0,
-        moment.utc(latestRecord[this.realCursorField]).toDate().getTime()
+        moment.utc(latestRecord[this.cursorField]).toDate().getTime()
       ),
     };
   }

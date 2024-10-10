@@ -1,13 +1,35 @@
 import {AirbyteLogger, AirbyteStreamBase} from 'faros-airbyte-cdk';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
+import _ from 'lodash';
 import moment from 'moment';
+import pEvent from 'p-event';
 import {Transform, TransformCallback, TransformOptions} from 'stream';
 import throat from 'throat';
 import tmp from 'tmp';
+import {z} from 'zod';
+import {zodToJsonSchema} from 'zod-to-json-schema';
 
 import {Klaviyo} from '../klaviyo';
-import {KlaviyoConfig} from '../types';
+import {DatePropertiesToString, KeysToSnakeCase, KlaviyoConfig} from '../types';
+
+tmp.setGracefulCleanup();
+
+export function fromZodType(type: z.AnyZodObject) {
+  const schema: any = _.omit(zodToJsonSchema(type), ['additionalProperties']);
+  schema.properties = _.mapValues(schema.properties, (v) =>
+    _.omit(v, ['additionalProperties'])
+  );
+  return schema;
+}
+
+export function fromApiRecordAttributes<T extends Record<string, any>>(
+  record: T
+) {
+  return _.mapKeys(record, (v, k) => _.snakeCase(k)) as KeysToSnakeCase<
+    DatePropertiesToString<T>
+  >;
+}
 
 export function momentRanges(options: {
   from: moment.Moment;
@@ -24,7 +46,7 @@ export function momentRanges(options: {
     startOverlap = moment.duration(0),
   } = options;
   const ranges: Array<{from: moment.Moment; to: moment.Moment}> = [];
-  const isFirst = false;
+  let isFirst = true;
   for (let d = moment.utc(from.clone()); d.isBefore(to); ) {
     const a = d.clone();
     const b = d.add(step).clone();
@@ -32,6 +54,7 @@ export function momentRanges(options: {
       from: isFirst ? a.subtract(startOverlap) : a.subtract(stepOverlap),
       to: b.add(stepOverlap),
     });
+    isFirst = false;
   }
   return ranges;
 }
@@ -77,16 +100,16 @@ class FileBufferedProcessor<T> {
   isProcessing = false;
 
   private writeWorker: Promise<void> | undefined;
-  private writeBufferLimit = 128 * 1024;
-  private readBufferLimit = 1024 * 1024;
+  private writeBufferLimit = 64 * 1024;
+  private readBufferLimit = 512 * 1024;
 
   constructor(
     public generator: AsyncGenerator<T>,
     options: {
-      controller?: AbortController;
-    } = {}
+      controller: AbortController;
+    }
   ) {
-    this.controller = options.controller ?? new AbortController();
+    this.controller = options.controller;
   }
 
   get worker() {
@@ -106,6 +129,7 @@ class FileBufferedProcessor<T> {
   }
 
   async start() {
+    this.controller.signal.throwIfAborted();
     if (this.writeWorker) {
       throw new Error('Already started.');
     }
@@ -113,6 +137,7 @@ class FileBufferedProcessor<T> {
       const file = fs
         .createWriteStream(this.bufferFile, {
           encoding: 'utf-8',
+          flags: 'a',
         })
         .on('error', reject)
         .on('close', () => {
@@ -131,8 +156,11 @@ class FileBufferedProcessor<T> {
             this.controller.signal.throwIfAborted();
             writer.write(value);
           }
-        } catch (err) {
-          reject(err);
+        } catch (e: any) {
+          if (e.name !== 'AbortError') {
+            this.controller.abort();
+            reject(e);
+          }
         } finally {
           writer.end();
         }
@@ -142,6 +170,7 @@ class FileBufferedProcessor<T> {
   }
 
   async *process(): AsyncGenerator<T> {
+    this.controller.signal.throwIfAborted();
     if (this.isProcessing) {
       throw new Error('Already processing.');
     }
@@ -155,23 +184,6 @@ class FileBufferedProcessor<T> {
       persistent: false,
       signal: this.controller.signal,
     });
-    const waitForChange = () => {
-      return new Promise<void>((resolve, reject) => {
-        const change = () => {
-          watcher.off('error', abort);
-          watcher.off('close', change);
-          watcher.off('change', change);
-          resolve();
-        };
-        const abort = (err: Error) => {
-          watcher.off('error', abort);
-          watcher.off('close', change);
-          watcher.off('change', change);
-          reject(err);
-        };
-        watcher.on('change', change).on('error', abort).on('close', change);
-      });
-    };
 
     // stream from file buffer
     let lastPartial = '';
@@ -203,10 +215,15 @@ class FileBufferedProcessor<T> {
             lastPartial = nextPartial;
           }
         } while (chunk.bytesRead > 0);
-        if (this.isDone) {
+        if (this.isDone && !lastPartial) {
           break;
         }
-        await Promise.race([waitForChange(), this.writeWorker]);
+        await Promise.race([
+          pEvent(watcher, ['close', 'change'], {
+            rejectionEvents: ['error'],
+          }),
+          this.writeWorker,
+        ]);
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') {
@@ -225,7 +242,8 @@ class FileBufferedProcessor<T> {
 
 export abstract class KlaviyoStream extends AirbyteStreamBase {
   public readonly controller: AbortController = new AbortController();
-  private ids = new Set<string>();
+  private lastIds = new Set<string>();
+  private currentIds = new Set<string>();
 
   constructor(
     logger: AirbyteLogger,
@@ -238,22 +256,33 @@ export abstract class KlaviyoStream extends AirbyteStreamBase {
     );
   }
 
-  shouldEmit(id: string) {
-    const seen = this.ids.has(id);
-    if (!seen) {
-      this.ids.add(id);
-    }
-    return !seen;
-  }
+  /**
+   * The primary key of the stream (restricted to non-nested values for now).
+   */
+  abstract get primaryKey(): string;
 
-  async *parallelSequentialRead<T, U, V extends this>(
+  /**
+   * The cursor field of the stream (restricted to non-nested values for now).
+   */
+  abstract get cursorField(): string | never[];
+
+  async *parallelSequentialRead<
+    T extends {from?: moment.Moment; to?: moment.Moment},
+    U extends Record<string, any>,
+    V extends this,
+  >(
     options: {
       parallel?: number;
+      dedupe?: boolean;
     },
     args: T[],
     generatorFn: (this: V, args: T) => AsyncGenerator<U>
   ) {
     const {parallel = 10} = options;
+    const cursorField = Array.isArray(this.cursorField)
+      ? undefined
+      : this.cursorField;
+    const dedupe = options.dedupe && !!this.primaryKey;
 
     // setup strems
     const streams = args.map(
@@ -264,9 +293,10 @@ export abstract class KlaviyoStream extends AirbyteStreamBase {
     );
 
     // start all the streams
-    const workers = streams.map(
+    streams.map(
       throat(parallel, async (stream) => {
         try {
+          this.controller.signal.throwIfAborted();
           await stream.start();
         } catch (e: any) {
           if (e.name !== 'AbortError') {
@@ -279,12 +309,23 @@ export abstract class KlaviyoStream extends AirbyteStreamBase {
 
     // stream sequentially
     try {
-      for (const stream of streams) {
+      for (let stream = streams.shift(); stream; stream = streams.shift()) {
         this.controller.signal.throwIfAborted();
         for await (const item of stream.process()) {
           this.controller.signal.throwIfAborted();
+          if (dedupe) {
+            // TODO: narrow the number of current ids stored by examining the chunk's from field
+            this.currentIds.add(item[this.primaryKey]);
+            if (this.lastIds.has(item[this.primaryKey])) {
+              continue;
+            }
+          }
           yield item;
         }
+        await stream.cleanup();
+        // reset the currentIds
+        this.lastIds = this.currentIds;
+        this.currentIds = new Set<string>();
       }
     } catch (e: any) {
       if (e.name !== 'AbortError') {
@@ -292,9 +333,5 @@ export abstract class KlaviyoStream extends AirbyteStreamBase {
         throw e;
       }
     }
-
-    // should be a no-op but just in case
-    await Promise.all(workers);
-    await Promise.all(streams.map((s) => s.cleanup()));
   }
 }
