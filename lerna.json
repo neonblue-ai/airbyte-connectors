@@ -3,7 +3,6 @@
   "packages": [
     "faros-airbyte-cdk",
     "faros-airbyte-common",
-    "destinations/**",
-    "sources/**"
+    "sources/klaviyo-source"
   ]
 }

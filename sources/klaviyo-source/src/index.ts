@@ -7,10 +7,11 @@ import {
   AirbyteStreamBase,
 } from 'faros-airbyte-cdk';
 import {ApiKeySession} from 'klaviyo-api';
+import _ from 'lodash';
 import VError from 'verror';
 
 import {getKlaviyoOAuthSession, Klaviyo} from './klaviyo';
-import {Events, Metrics, Profiles} from './streams';
+import * as Streams from './streams';
 import {KlaviyoConfig} from './types';
 
 function getKlaviyoClient(config: KlaviyoConfig) {
@@ -58,10 +59,6 @@ export class KlaviyoSource extends AirbyteSourceBase<KlaviyoConfig> {
 
   streams(config: KlaviyoConfig): AirbyteStreamBase[] {
     const client = getKlaviyoClient(config);
-    return [
-      new Profiles(this.logger, config, client),
-      new Events(this.logger, config, client),
-      new Metrics(this.logger, config, client),
-    ];
+    return _.map(Streams, (S) => new S(this.logger, config, client));
   }
 }
