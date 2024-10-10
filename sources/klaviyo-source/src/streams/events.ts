@@ -101,6 +101,10 @@ export class Events extends KlaviyoStream {
     );
   }
 
+  get stateCheckpointInterval(): number | undefined {
+    return 100000;
+  }
+
   getUpdatedState(
     currentStreamState: EventStreamState,
     latestRecord: Record,
