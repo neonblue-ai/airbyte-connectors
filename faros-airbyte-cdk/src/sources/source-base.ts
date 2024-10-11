@@ -794,26 +794,33 @@ export abstract class AirbyteSourceBaseV2<
 // https://github.com/airbytehq/airbyte/blob/master/airbyte-cdk/python/airbyte_cdk/sources/connector_state_manager.py#L104
 class AirbyteStateManager {
   type: 'STREAM' | 'GLOBAL';
-  global: AirbyteStateBlobV2;
+  global: AirbyteStateBlobV2 = {};
   streams: Record<string, AirbyteStateBlobV2> = {};
 
   constructor(state: AirbyteStateMessageV2[]) {
-    this.type = state?.[0]?.type ?? 'STREAM';
-    if (this.type === 'GLOBAL' && isAirbyteGlobalStateMessageV2(state[0])) {
-      this.global = state[0].global.shared_state ?? {};
-      for (const streamState of state[0].global.stream_states ?? []) {
-        this.streams[
-          this._keyFromStreamDescriptor(streamState.stream_descriptor)
-        ] = streamState || {};
-      }
-    } else {
-      for (const streamState of state) {
-        if (isAirbyteStreamStateMessageV2(streamState)) {
+    try {
+      this.type = state?.[0]?.type ?? 'STREAM';
+      if (this.type === 'GLOBAL' && isAirbyteGlobalStateMessageV2(state[0])) {
+        this.global = state[0].global.shared_state ?? {};
+        for (const streamState of state[0].global.stream_states ?? []) {
           this.streams[
-            this._keyFromStreamDescriptor(streamState.stream.stream_descriptor)
-          ] = streamState.stream.stream_state || {};
+            this._keyFromStreamDescriptor(streamState.stream_descriptor)
+          ] = streamState || {};
+        }
+      } else {
+        for (const streamState of state) {
+          if (isAirbyteStreamStateMessageV2(streamState)) {
+            this.streams[
+              this._keyFromStreamDescriptor(
+                streamState.stream.stream_descriptor
+              )
+            ] = streamState.stream.stream_state || {};
+          }
         }
       }
+    } catch (err) {
+      // reset the state
+      this.type = 'STREAM';
     }
   }
 
