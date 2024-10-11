@@ -793,16 +793,13 @@ export abstract class AirbyteSourceBaseV2<
 
 // https://github.com/airbytehq/airbyte/blob/master/airbyte-cdk/python/airbyte_cdk/sources/connector_state_manager.py#L104
 class AirbyteStateManager {
-  state_type: 'STREAM' | 'GLOBAL';
+  type: 'STREAM' | 'GLOBAL';
   global: AirbyteStateBlobV2;
   streams: Record<string, AirbyteStateBlobV2> = {};
 
   constructor(state: AirbyteStateMessageV2[]) {
-    this.state_type = state?.[0]?.state_type ?? 'STREAM';
-    if (
-      this.state_type === 'GLOBAL' &&
-      isAirbyteGlobalStateMessageV2(state[0])
-    ) {
+    this.type = state?.[0]?.type ?? 'STREAM';
+    if (this.type === 'GLOBAL' && isAirbyteGlobalStateMessageV2(state[0])) {
       this.global = state[0].global.shared_state ?? {};
       for (const streamState of state[0].global.stream_states ?? []) {
         this.streams[
@@ -833,7 +830,7 @@ class AirbyteStateManager {
     state: AirbyteStateMessageCombinedV2
   ) {
     this.streams[this._keyFromStreamDescriptor(stream)] = state.stream || {};
-    if (this.state_type === 'GLOBAL') {
+    if (this.type === 'GLOBAL') {
       this.global = state.global || {};
     }
     return this.getStateForStream(stream);
@@ -845,7 +842,7 @@ class AirbyteStateManager {
     return JSON.parse(
       JSON.stringify({
         stream: this.streams[this._keyFromStreamDescriptor(stream)] || {},
-        global: this.state_type === 'GLOBAL' ? this.global : {},
+        global: this.type === 'GLOBAL' ? this.global : {},
       })
     );
   }
@@ -854,9 +851,9 @@ class AirbyteStateManager {
     stream: AirbyteStreamDescriptorV2
   ): AirbyteStateMessageEnvelopeV2 {
     return new AirbyteStateMessageEnvelopeV2(
-      this.state_type === 'GLOBAL'
+      this.type === 'GLOBAL'
         ? {
-            state_type: 'GLOBAL',
+            type: 'GLOBAL',
             global: {
               shared_state: this.global || {},
               stream_states: Object.entries(this.streams).map(
@@ -868,7 +865,7 @@ class AirbyteStateManager {
             },
           }
         : {
-            state_type: 'STREAM',
+            type: 'STREAM',
             stream: {
               stream_descriptor: JSON.parse(
                 this._keyFromStreamDescriptor(stream)

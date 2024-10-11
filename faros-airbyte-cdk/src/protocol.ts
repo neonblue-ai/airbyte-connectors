@@ -332,11 +332,11 @@ export class AirbyteStateMessage implements AirbyteMessage {
 
 export type AirbyteStateMessageV2 =
   | {
-      state_type: 'STREAM';
+      type: 'STREAM';
       stream: AirbyteStreamStateV2;
     }
   | {
-      state_type: 'GLOBAL';
+      type: 'GLOBAL';
       global: AirbyteGlobalStateV2;
     };
 
@@ -347,14 +347,14 @@ export type AirbyteStateMessageCombinedV2 = {
 
 export function isAirbyteGlobalStateMessageV2(
   state: AirbyteStateMessageV2
-): state is {state_type: 'GLOBAL'; global: AirbyteGlobalStateV2} {
-  return state.state_type === 'GLOBAL';
+): state is {type: 'GLOBAL'; global: AirbyteGlobalStateV2} {
+  return state.type === 'GLOBAL';
 }
 
 export function isAirbyteStreamStateMessageV2(
   state: AirbyteStateMessageV2
-): state is {state_type: 'STREAM'; stream: AirbyteStreamStateV2} {
-  return state.state_type === 'STREAM';
+): state is {type: 'STREAM'; stream: AirbyteStreamStateV2} {
+  return state.type === 'STREAM';
 }
 
 export interface AirbyteStateBlobV2 {
@@ -382,11 +382,11 @@ export class AirbyteStateMessageEnvelopeV2 implements AirbyteMessage {
   constructor(
     readonly state:
       | {
-          state_type: 'STREAM';
+          type: 'STREAM';
           stream: AirbyteStreamStateV2;
         }
       | {
-          state_type: 'GLOBAL';
+          type: 'GLOBAL';
           global: {
             shared_state: AirbyteStateBlobV2;
             stream_states: AirbyteStreamStateV2[];
