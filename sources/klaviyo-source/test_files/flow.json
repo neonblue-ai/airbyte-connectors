@@ -1,0 +1,68 @@
+{
+  "id": "LnfgmM",
+  "name": "New Customer Thank You",
+  "status": "manual",
+  "archived": false,
+  "created": "2017-07-14T19:35:00.000Z",
+  "updated": "2018-02-28T16:36:12.000Z",
+  "trigger_type": "Metric",
+  "account_id": "M8RPxA",
+  "flow_actions": [
+    {
+      "id": "529424",
+      "action_type": "SEND_EMAIL",
+      "status": "manual",
+      "created": "2017-07-14T19:35:01.000Z",
+      "updated": "2024-03-26T05:43:21.000Z",
+      "settings": {},
+      "tracking_options": {
+        "add_utm": false,
+        "utm_params": [],
+        "is_tracking_opens": true,
+        "is_tracking_clicks": true
+      },
+      "send_options": {
+        "use_smart_sending": false,
+        "is_transactional": false
+      },
+      "render_options": null,
+      "flow_message_ids": ["QA85Zn"],
+      "flow_messages": [
+        {
+          "id": "QA85Zn",
+          "name": "New Customer Thank You: Email 1",
+          "channel": "Email",
+          "content": {
+            "subject": "You're what makes us great",
+            "preview_text": "",
+            "from_email": "designer@nzxt.com",
+            "from_label": "nzxt, inc",
+            "reply_to_email": null,
+            "cc_email": null,
+            "bcc_email": null
+          },
+          "created": "2017-07-14T19:35:01.000Z",
+          "updated": "2017-07-14T19:35:01.000Z",
+          "template_id": "NMGcuT"
+        }
+      ]
+    },
+    {
+      "id": "1647001",
+      "action_type": "TIME_DELAY",
+      "status": "live",
+      "created": "2018-02-28T16:36:12.000Z",
+      "updated": "2018-02-28T16:36:12.000Z",
+      "settings": {
+        "days_of_week": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "delay_seconds": 86400
+      },
+      "tracking_options": null,
+      "send_options": null,
+      "render_options": null,
+      "flow_message_ids": [],
+      "flow_messages": []
+    }
+  ],
+  "tags": []
+}

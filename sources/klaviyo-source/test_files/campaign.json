@@ -9,23 +9,23 @@
     "excluded": []
   },
   "send_options": {
-    "useSmartSending": true
+    "use_smart_sending": true
   },
   "tracking_options": {
-    "isAddUtm": true,
-    "utmParams": [],
-    "isTrackingClicks": true,
-    "isTrackingOpens": true
+    "is_add_utm": true,
+    "utm_params": [],
+    "is_tracking_clicks": true,
+    "is_tracking_opens": true
   },
   "send_strategy": {
     "method": "static",
-    "optionsStatic": {
+    "options_static": {
       "datetime": "2017-09-19T06:04:19.000Z",
-      "isLocal": false,
-      "sendPastRecipientsImmediately": null
+      "is_local": false,
+      "send_past_recipients_immediately": null
     },
-    "optionsThrottled": null,
-    "optionsSto": null
+    "options_throttled": null,
+    "options_sto": null
   },
   "created_at": "2017-09-19T00:08:16.000Z",
   "scheduled_at": "2017-09-19T06:04:19.000Z",
@@ -40,22 +40,22 @@
       "channel": "email",
       "content": {
         "subject": "How Do You Like Your New Gaming Rig?",
-        "previewText": "",
-        "fromEmail": "bldsupport@nzxt.com",
-        "fromLabel": "BLD",
-        "replyToEmail": null,
-        "ccEmail": null,
-        "bccEmail": null
+        "preview_text": "",
+        "from_email": "bldsupport@nzxt.com",
+        "from_label": "BLD",
+        "reply_to_email": null,
+        "cc_email": null,
+        "bcc_email": null
       },
-      "sendTimes": [
+      "send_times": [
         {
           "datetime": "2017-09-19T06:04:19.000Z",
-          "isLocal": false
+          "is_local": false
         }
       ],
-      "renderOptions": null,
-      "createdAt": "2017-09-19T00:08:16.000Z",
-      "updatedAt": "2017-09-19T06:04:22.000Z",
+      "render_options": null,
+      "created_at": "2017-09-19T00:08:16.000Z",
+      "updated_at": "2017-09-19T06:04:22.000Z",
       "template_id": "JjWHdm"
     }
   ],

@@ -10,4 +10,6 @@ export const FlowRecord = z.object({
   trigger_type: z.string().optional(),
   flow_action_ids: z.array(z.string()).optional(),
   tag_ids: z.array(z.string()).optional(),
+  flow_actions: z.array(z.any()).optional(),
+  tags: z.array(z.string()).optional(),
 });

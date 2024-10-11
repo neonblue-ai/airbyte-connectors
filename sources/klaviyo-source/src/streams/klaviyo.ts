@@ -1,6 +1,7 @@
 import {AirbyteLogger, AirbyteStreamBase} from 'faros-airbyte-cdk';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
+import isPrimitive from 'is-primitive';
 import _ from 'lodash';
 import moment from 'moment';
 import pEvent from 'p-event';
@@ -14,6 +15,10 @@ import {DatePropertiesToString, KeysToSnakeCase, KlaviyoConfig} from '../types';
 
 tmp.setGracefulCleanup();
 
+function isPrimitiveOrDate(val: any) {
+  return isPrimitive(val) || val instanceof Date;
+}
+
 export function fromZodType(type: z.AnyZodObject) {
   const schema: any = _.omit(zodToJsonSchema(type), ['additionalProperties']);
   schema.properties = _.mapValues(schema.properties, (v) =>
@@ -23,11 +28,24 @@ export function fromZodType(type: z.AnyZodObject) {
 }
 
 export function fromApiRecordAttributes<T extends Record<string, any>>(
-  record: T
+  record: T,
+  ignoredKeys: Set<string> = new Set()
 ) {
-  return _.mapKeys(record, (v, k) => _.snakeCase(k)) as KeysToSnakeCase<
-    DatePropertiesToString<T>
-  >;
+  return _.mapValues(
+    _.mapKeys(record, (v, k) => _.snakeCase(k)),
+    (v, k) => {
+      if (isPrimitiveOrDate(v) || ignoredKeys.has(k)) {
+        return v;
+      } else if (Array.isArray(v)) {
+        // assume we don't have nested arrays of objects, i.e. [[{a: 1}]] is not allowed
+        return v.map((vv) =>
+          isPrimitiveOrDate(vv) ? vv : fromApiRecordAttributes(vv)
+        );
+      } else {
+        return fromApiRecordAttributes(v);
+      }
+    }
+  ) as KeysToSnakeCase<DatePropertiesToString<T>>;
 }
 
 export function momentRanges(options: {

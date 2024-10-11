@@ -55,6 +55,7 @@ export class Campaigns extends KlaviyoStream {
       .getTime();
     this.logger.info(`Last cutoff: ${lastCutoff}`);
     for (const channel of ['email', 'sms']) {
+      this.controller.signal.throwIfAborted();
       for await (const items of this.client.getCampaigns(
         [
           `equals(messages.channel,'${channel}')`,
@@ -65,6 +66,7 @@ export class Campaigns extends KlaviyoStream {
           sort: this.cursorField,
         }
       )) {
+        this.controller.signal.throwIfAborted();
         const childItems = items.map((item, i) => {
           return Promise.all([
             this.client.withLimiter(
@@ -83,6 +85,7 @@ export class Campaigns extends KlaviyoStream {
           ]);
         });
         for (let j = 0; j < items.length; j++) {
+          this.controller.signal.throwIfAborted();
           const item = items[j];
           const [messages, tags] = await childItems[j];
           yield {
@@ -95,7 +98,7 @@ export class Campaigns extends KlaviyoStream {
             account_id: accountId,
             campaign_messages: messages.body.data.map((m) => ({
               id: m.id,
-              ...m.attributes,
+              ...fromApiRecordAttributes(m.attributes),
               template_id: m.relationships?.template?.data?.id,
             })),
             tags: tags.body.data.map((t) => t.attributes.name),

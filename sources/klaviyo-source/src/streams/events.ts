@@ -87,7 +87,10 @@ export class Events extends KlaviyoStream {
             this.controller.signal.throwIfAborted();
             yield {
               id: item.id,
-              ...fromApiRecordAttributes(item.attributes),
+              ...fromApiRecordAttributes(
+                item.attributes,
+                new Set(['event_properties'])
+              ),
               metric_id: item.relationships?.metric?.data?.id,
               profile_id: item.relationships?.profile?.data?.id,
               attribution_ids: item.relationships?.attributions?.data?.map(

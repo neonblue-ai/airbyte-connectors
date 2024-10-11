@@ -9,7 +9,7 @@ export interface KlaviyoConfig extends AirbyteConfig {
         refresh_token: string;
       }
     | {auth_type: 'api_key'; api_key: string};
-  readonly intialize?: boolean;
+  readonly initialize?: boolean;
 }
 
 // https://gist.github.com/kuroski/9a7ae8e5e5c9e22985364d1ddbf3389d
