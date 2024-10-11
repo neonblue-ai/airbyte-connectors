@@ -5,6 +5,9 @@ import {
   AirbyteConfiguredCatalog,
   AirbyteMessage,
   AirbyteState,
+  AirbyteStateMessageEnvelopeV2,
+  AirbyteStateMessageV2,
+  ConfiguredAirbyteCatalogV2,
 } from '../protocol';
 
 /**
@@ -39,12 +42,14 @@ export abstract class AirbyteSource<
    */
   async onBeforeRead(
     config: Config,
-    catalog: AirbyteConfiguredCatalog,
-    state?: AirbyteState
+    catalog: ConfiguredAirbyteCatalogV2,
+    // state?: AirbyteState
+    state: AirbyteStateMessageV2[]
   ): Promise<{
     config: Config;
-    catalog: AirbyteConfiguredCatalog;
-    state?: AirbyteState;
+    catalog: ConfiguredAirbyteCatalogV2;
+    // state?: AirbyteState;
+    state: AirbyteStateMessageV2[];
   }> {
     return {config, catalog, state};
   }
@@ -67,6 +72,7 @@ export abstract class AirbyteSource<
     config: Config,
     redactedConfig: AirbyteConfig,
     catalog: AirbyteConfiguredCatalog,
-    state: AirbyteState
+    // state: AirbyteState
+    state: AirbyteStateMessageV2[]
   ): AsyncGenerator<AirbyteMessage>;
 }

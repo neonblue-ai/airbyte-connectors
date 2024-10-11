@@ -7,7 +7,12 @@ import path from 'path';
 
 import {wrapApiError} from '../errors';
 import {buildArgs, buildJson, helpTable, traverseObject} from '../help';
-import {AirbyteConfig, AirbyteState} from '../protocol';
+import {
+  AirbyteConfig,
+  AirbyteState,
+  AirbyteStateMessageV2,
+  ConfiguredAirbyteCatalogV2,
+} from '../protocol';
 import {ConnectorVersion, Runner} from '../runner';
 import {
   addSourceCommonProperties,
@@ -95,29 +100,37 @@ export class AirbyteSourceRunner<Config extends AirbyteConfig> extends Runner {
           this.logNodeOptions('Source');
           const initialConfig = require(path.resolve(opts.config));
           const config = await this.source.onBeforeRun(initialConfig);
-          const catalog = require(path.resolve(opts.catalog));
+          const catalog: ConfiguredAirbyteCatalogV2 = require(
+            path.resolve(opts.catalog)
+          );
           const spec = addSourceCommonProperties(await this.source.spec());
           const redactedConfig = redactConfig(config, spec);
           this.logger.info(`Source version: ${ConnectorVersion}`);
           this.logger.info(`Config: ${JSON.stringify(redactedConfig)}`);
           this.logger.info(`Catalog: ${JSON.stringify(catalog)}`);
 
-          let state: AirbyteState | undefined = undefined;
+          // let state: AirbyteState | undefined = undefined;
+          // https://github.com/airbytehq/airbyte/blob/master/airbyte-cdk/python/airbyte_cdk/sources/connector_state_manager.py#L24
+          let state: AirbyteStateMessageV2[] = [];
           if (opts.state) {
             state = require(path.resolve(opts.state));
             this.logger.info(`State: ${JSON.stringify(state)}`);
           }
 
           try {
-            this.logger.getState = () => maybeCompressState(config, state);
+            // this.logger.getState = () => maybeCompressState(config, state);
+            this.logger.getState = () => state;
             const res = await this.source.onBeforeRead(
               config,
               catalog,
-              State.decompress(state)
+              // State.decompress(state)
+              state
             );
-            const clonedState = State.decompress(cloneDeep(res.state ?? {}));
-            this.logger.getState = () =>
-              maybeCompressState(config, clonedState);
+            // const clonedState = State.decompress(cloneDeep(res.state ?? {}));
+            const clonedState = cloneDeep(res.state ?? []);
+            // this.logger.getState = () =>
+            //   maybeCompressState(config, clonedState);
+            this.logger.getState = () => state;
             const iter = this.source.read(
               res.config,
               redactedConfig,

@@ -11,6 +11,7 @@ import {
   AirbyteConfiguredStream,
   AirbyteConnectionStatus,
   AirbyteConnectionStatusMessage,
+  AirbyteGlobalStateV2,
   AirbyteLogLevel,
   AirbyteMessage,
   AirbyteMessageType,
@@ -18,9 +19,19 @@ import {
   AirbyteSourceConfigMessage,
   AirbyteSourceStatusMessage,
   AirbyteState,
+  AirbyteStateBlobV2,
   AirbyteStateMessage,
+  AirbyteStateMessageCombinedV2,
+  AirbyteStateMessageEnvelopeV2,
+  AirbyteStateMessageV2,
+  AirbyteStreamDescriptorV2,
+  AirbyteStreamStateV2,
+  ConfiguredAirbyteCatalogV2,
+  isAirbyteGlobalStateMessageV2,
+  isAirbyteStreamStateMessageV2,
   isSourceStatusMessage,
   isStateMessage,
+  isStateMessageV2,
   SyncMode,
 } from '../protocol';
 import {ConnectorVersion} from '../runner';
@@ -32,6 +43,8 @@ type PartialAirbyteConfig = Pick<
   AirbyteConfig,
   'backfill' | 'max_slice_failures'
 >;
+
+type PartialAirbyteConfigV2 = Pick<AirbyteConfig, 'max_slice_failures'>;
 
 /**
  * Airbyte Source base class providing additional boilerplate around the Check
@@ -505,16 +518,365 @@ export abstract class AirbyteSourceBase<
     );
   }
 
-  private adjustLoggerLevel(config: Config) {
+  protected adjustLoggerLevel(config: Config) {
     if (config.debug) {
       this.logger.level = AirbyteLogLevel.DEBUG;
     }
   }
 }
 
+/**
+ * @deprecated Faros specific
+ */
 export function maybeCompressState(
   config: AirbyteConfig,
   state: AirbyteState
 ): AirbyteState {
   return config.compress_state === false ? state : State.compress(state);
+}
+
+export abstract class AirbyteSourceBaseV2<
+  Config extends AirbyteConfig,
+> extends AirbyteSourceBase<Config> {
+  /**
+   * Implements the Read operation from the Airbyte Specification. See
+   * https://docs.airbyte.io/architecture/airbyte-specification.
+   */
+  async *read(
+    config: Config,
+    redactedConfig: AirbyteConfig,
+    catalog: ConfiguredAirbyteCatalogV2,
+    state: AirbyteStateMessageV2[]
+  ): AsyncGenerator<AirbyteMessage> {
+    this.adjustLoggerLevel(config);
+
+    this.logger.info(`Syncing ${this.name}`);
+    this.logger.info(`Config: ${JSON.stringify(redactedConfig)}`);
+    this.logger.info(`State: ${JSON.stringify(state)}`);
+    this.logger.info(`Catalog: ${JSON.stringify(catalog)}`);
+    this.logger.info(
+      `Metadata: ${JSON.stringify({type: this.type, version: ConnectorVersion})}`
+    );
+
+    // TODO: assert all streams exist in the connector
+    // get the streams once in case the connector needs to make any queries to
+    // generate them
+    const streamInstances = keyBy(this.streams(config), (s) => s.name);
+    const configuredStreams = keyBy(catalog.streams, (s) => s.stream.name);
+    const configuredStreamNames = Object.keys(configuredStreams);
+
+    const missingStreams = configuredStreamNames.filter(
+      (streamName) => !streamInstances[streamName]
+    );
+    if (missingStreams.length > 0) {
+      throw new VError(
+        `The requested stream(s) ${JSON.stringify(
+          missingStreams
+        )} were not found in the source. Available streams: ${Object.keys(
+          streamInstances
+        )}`
+      );
+    }
+
+    const streamDeps: [string, string][] = [];
+    for (const [streamName, stream] of Object.entries(streamInstances)) {
+      if (!configuredStreamNames.includes(streamName)) {
+        // The stream is not requested in the catalog, ignore it
+        continue;
+      }
+      for (const dependency of stream.dependencies) {
+        if (!configuredStreamNames.includes(dependency)) {
+          // The stream dependency is not requested in the catalog, ignore it
+          continue;
+        }
+        streamDeps.push([dependency, streamName]);
+      }
+    }
+
+    // Requested streams in the order they should be processed
+    const sortedStreams = toposort.array(configuredStreamNames, streamDeps);
+
+    // Parse connector state
+    const stateManager = new AirbyteStateManager(state);
+
+    const failedStreams = [];
+    for (const streamName of sortedStreams) {
+      const configuredStream = configuredStreams[streamName];
+      let streamRecordCounter = 0;
+      try {
+        const streamInstance = streamInstances[streamName];
+        const generator = this.readStreamV2(
+          streamInstance,
+          configuredStream,
+          stateManager,
+          pick(config, ['max_slice_failures'])
+        );
+
+        for await (const message of generator) {
+          if (message.type === AirbyteMessageType.RECORD) {
+            streamRecordCounter++;
+          }
+          yield message;
+        }
+      } catch (e: any) {
+        this.logger.error(
+          `Encountered an error while reading stream ${streamName}: ${
+            e.message ?? JSON.stringify(e)
+          }`,
+          e.stack
+        );
+        if (config.max_stream_failures == null) {
+          throw e;
+        }
+        failedStreams.push(streamName);
+        // -1 means unlimited allowed stream failures
+        if (
+          config.max_stream_failures !== -1 &&
+          failedStreams.length > config.max_stream_failures
+        ) {
+          this.logger.error(
+            `Exceeded maximum number of allowed stream failures: ${config.max_stream_failures}`
+          );
+          break;
+        }
+      }
+    }
+
+    if (failedStreams.length > 0) {
+      throw new VError(
+        `Encountered an error while reading stream(s): ${JSON.stringify(
+          failedStreams
+        )}`
+      );
+    }
+
+    this.logger.info(`Finished syncing ${this.name}`);
+  }
+
+  private async *readStreamV2(
+    streamInstance: AirbyteStreamBase,
+    configuredStream: AirbyteConfiguredStream,
+    stateManager: AirbyteStateManager,
+    config: PartialAirbyteConfigV2
+  ): AsyncGenerator<AirbyteMessage> {
+    const useIncremental =
+      configuredStream.sync_mode === SyncMode.INCREMENTAL &&
+      streamInstance.supportsIncremental;
+
+    const recordGenerator = this.doReadStreamV2(
+      streamInstance,
+      configuredStream,
+      useIncremental ? SyncMode.INCREMENTAL : SyncMode.FULL_REFRESH,
+      stateManager,
+      config
+    );
+
+    let recordCounter = 0;
+    const streamName = configuredStream.stream.name;
+    const mode = useIncremental ? 'incremental' : 'full';
+    this.logger.info(`Syncing ${streamName} stream in ${mode} mode`);
+
+    for await (const record of recordGenerator) {
+      if (record.type === AirbyteMessageType.RECORD) {
+        recordCounter++;
+      }
+      yield record;
+    }
+    this.logger.info(
+      `Finished syncing ${streamName} stream. Read ${recordCounter} records`
+    );
+  }
+
+  private async *doReadStreamV2(
+    streamInstance: AirbyteStreamBase,
+    configuredStream: AirbyteConfiguredStream,
+    syncMode: SyncMode,
+    stateManager: AirbyteStateManager,
+    config: PartialAirbyteConfigV2
+  ): AsyncGenerator<AirbyteMessage> {
+    const streamName = configuredStream.stream.name;
+    let streamState = stateManager.getStateForStream({name: streamName});
+    this.logger.info(
+      `Setting initial state of ${streamName} stream to ${JSON.stringify(
+        streamState
+      )}`
+    );
+    yield stateManager.getAirbyteMessageEnvelope({name: streamName});
+
+    const checkpointInterval = streamInstance.stateCheckpointInterval;
+    if (checkpointInterval < 0) {
+      throw new VError(
+        `Checkpoint interval ${checkpointInterval}of ${streamName} stream must be a positive integer`
+      );
+    }
+    const slices = streamInstance.streamSlices(
+      syncMode,
+      configuredStream.cursor_field,
+      streamState
+    );
+    const failedSlices = [];
+    let streamRecordCounter = 0;
+    await streamInstance.onBeforeRead();
+    for await (const slice of slices) {
+      if (slice) {
+        throw new Error(`Slice is not supported in V2.`);
+        this.logger.info(
+          `Started processing ${streamName} stream slice ${JSON.stringify(
+            slice
+          )}`
+        );
+      }
+      let sliceRecordCounter = 0;
+      const records = streamInstance.readRecords(
+        syncMode,
+        configuredStream.cursor_field,
+        slice,
+        streamState.stream
+      );
+      try {
+        for await (const recordData of records) {
+          sliceRecordCounter++;
+          streamRecordCounter++;
+          yield AirbyteRecord.make(streamName, recordData);
+          streamState = stateManager.setStateForStream(
+            {name: streamName},
+            {
+              stream: streamInstance.getUpdatedState(
+                streamState,
+                recordData,
+                slice
+              ),
+              global: stateManager.global,
+            }
+          );
+          if (
+            checkpointInterval &&
+            sliceRecordCounter % checkpointInterval === 0
+          ) {
+            yield stateManager.getAirbyteMessageEnvelope({name: streamName});
+          }
+        }
+        yield stateManager.getAirbyteMessageEnvelope({name: streamName});
+        if (slice) {
+          this.logger.info(
+            `Finished processing ${streamName} stream slice ${JSON.stringify(
+              slice
+            )}. Read ${sliceRecordCounter} records`
+          );
+        }
+      } catch (e: any) {
+        if (!slice || config.max_slice_failures == null) {
+          throw e;
+        }
+        failedSlices.push(slice);
+        if (
+          config.max_slice_failures !== -1 &&
+          failedSlices.length > config.max_slice_failures
+        ) {
+          this.logger.error(
+            `Exceeded maximum number of allowed slice failures: ${config.max_slice_failures}`
+          );
+          break;
+        }
+      }
+    }
+    await streamInstance.onAfterRead();
+    if (failedSlices.length > 0) {
+      throw new VError(
+        `Encountered an error while processing ${streamName} stream slice(s): ${JSON.stringify(
+          failedSlices
+        )}`
+      );
+    }
+  }
+}
+
+// https://github.com/airbytehq/airbyte/blob/master/airbyte-cdk/python/airbyte_cdk/sources/connector_state_manager.py#L104
+class AirbyteStateManager {
+  state_type: 'STREAM' | 'GLOBAL';
+  global: AirbyteStateBlobV2;
+  streams: Record<string, AirbyteStateBlobV2> = {};
+
+  constructor(state: AirbyteStateMessageV2[]) {
+    this.state_type = state?.[0]?.state_type ?? 'STREAM';
+    if (
+      this.state_type === 'GLOBAL' &&
+      isAirbyteGlobalStateMessageV2(state[0])
+    ) {
+      this.global = state[0].global.shared_state ?? {};
+      for (const streamState of state[0].global.stream_states ?? []) {
+        this.streams[
+          this._keyFromStreamDescriptor(streamState.stream_descriptor)
+        ] = streamState || {};
+      }
+    } else {
+      for (const streamState of state) {
+        if (isAirbyteStreamStateMessageV2(streamState)) {
+          this.streams[
+            this._keyFromStreamDescriptor(streamState.stream.stream_descriptor)
+          ] = streamState.stream.stream_state || {};
+        }
+      }
+    }
+  }
+
+  private _keyFromStreamDescriptor(stream: AirbyteStreamDescriptorV2) {
+    // only handles name for now
+    return JSON.stringify({
+      name: stream.name,
+      // namespace: stream.namespace || undefined,
+    });
+  }
+
+  setStateForStream(
+    stream: AirbyteStreamDescriptorV2,
+    state: AirbyteStateMessageCombinedV2
+  ) {
+    this.streams[this._keyFromStreamDescriptor(stream)] = state.stream || {};
+    if (this.state_type === 'GLOBAL') {
+      this.global = state.global || {};
+    }
+    return this.getStateForStream(stream);
+  }
+
+  getStateForStream(
+    stream: AirbyteStreamDescriptorV2
+  ): AirbyteStateMessageCombinedV2 {
+    return JSON.parse(
+      JSON.stringify({
+        stream: this.streams[this._keyFromStreamDescriptor(stream)] || {},
+        global: this.state_type === 'GLOBAL' ? this.global : {},
+      })
+    );
+  }
+
+  getAirbyteMessageEnvelope(
+    stream: AirbyteStreamDescriptorV2
+  ): AirbyteStateMessageEnvelopeV2 {
+    return new AirbyteStateMessageEnvelopeV2(
+      this.state_type === 'GLOBAL'
+        ? {
+            state_type: 'GLOBAL',
+            global: {
+              shared_state: this.global || {},
+              stream_states: Object.entries(this.streams).map(
+                ([key, value]) => ({
+                  stream_descriptor: JSON.parse(key),
+                  stream_state: value || {},
+                })
+              ),
+            },
+          }
+        : {
+            state_type: 'STREAM',
+            stream: {
+              stream_descriptor: JSON.parse(
+                this._keyFromStreamDescriptor(stream)
+              ),
+              stream_state:
+                this.streams[this._keyFromStreamDescriptor(stream)] || {},
+            },
+          }
+    );
+  }
 }

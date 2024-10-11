@@ -2,11 +2,17 @@ import {Dictionary} from 'ts-essentials';
 import VError from 'verror';
 import zlib from 'zlib';
 
+/**
+ * @deprecated Faros specific
+ */
 export interface CompressedState {
   format: string;
   data: string;
 }
 
+/**
+ * @deprecated Faros specific
+ */
 export class State {
   static compress(state: Dictionary<any, string>): CompressedState {
     const zipped = zlib.gzipSync(JSON.stringify(state)).toString('base64');

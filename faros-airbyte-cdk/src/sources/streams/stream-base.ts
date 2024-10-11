@@ -5,7 +5,12 @@ import {Dictionary} from 'ts-essentials';
 import VError from 'verror';
 
 import {AirbyteLogger} from '../../logger';
-import {AirbyteStream, SyncMode} from '../../protocol';
+import {
+  AirbyteStateBlobV2,
+  AirbyteStateMessageCombinedV2,
+  AirbyteStream,
+  SyncMode,
+} from '../../protocol';
 
 export type StreamKey = string | string[] | string[][];
 

@@ -1,6 +1,7 @@
 import {Command} from 'commander';
 import {
   AirbyteSourceBase,
+  AirbyteSourceBaseV2,
   AirbyteSourceLogger,
   AirbyteSourceRunner,
   AirbyteSpec,
@@ -37,7 +38,7 @@ export function mainCommand(): Command {
   return new AirbyteSourceRunner(logger, source).mainCommand();
 }
 
-export class KlaviyoSource extends AirbyteSourceBase<KlaviyoConfig> {
+export class KlaviyoSource extends AirbyteSourceBaseV2<KlaviyoConfig> {
   get type(): string {
     return 'klaviyo';
   }

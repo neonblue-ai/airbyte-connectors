@@ -11,14 +11,23 @@ function captureConsoleLog(callback: () => void): string {
     },
   });
 
-  const originalLog = console.log;
-  console.log = (...args: any[]) => {
+  // override the write for testing
+  // const originalLog = console.log;
+  // console.log = (...args: any[]) => {
+  //   writableStream.write(args.join(' ') + '\n');
+  // };
+  const originalWrite = process.stdout.write;
+  process.stdout.write = (...args: any[]) => {
     writableStream.write(args.join(' ') + '\n');
+    return true;
   };
 
   callback();
 
-  console.log = originalLog;
+  // restore original writer
+  // console.log = originalLog;
+  process.stdout.write = originalWrite;
+
   return chunks.join('');
 }
 

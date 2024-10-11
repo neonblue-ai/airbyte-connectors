@@ -9,7 +9,10 @@ import {
   AirbyteMessageType,
   AirbyteRecord,
   AirbyteSourceBase,
+  AirbyteSourceBaseV2,
   AirbyteState,
+  AirbyteStateMessageV2,
+  ConfiguredAirbyteCatalogV2,
 } from '.';
 
 export function readTestResourceFile(fileName: string): string {
@@ -37,14 +40,15 @@ export const sourceCheckTest = async (
 };
 
 export interface SourceReadTestOptions {
-  source: AirbyteSourceBase<AirbyteConfig>;
+  source: AirbyteSourceBaseV2<AirbyteConfig>;
   configOrPath: string | AirbyteConfig;
-  catalogOrPath: string | AirbyteConfiguredCatalog;
-  stateOrPath?: string | AirbyteState;
+  catalogOrPath: string | ConfiguredAirbyteCatalogV2;
+  // stateOrPath?: string | AirbyteState;
+  stateOrPath?: string | AirbyteStateMessageV2[];
   onBeforeReadResultConsumer?: (res: {
     config: AirbyteConfig;
-    catalog: AirbyteConfiguredCatalog;
-    state?: AirbyteState;
+    catalog: ConfiguredAirbyteCatalogV2;
+    state?: AirbyteStateMessageV2[];
   }) => void;
   checkRecordsData?: (records: ReadonlyArray<Dictionary<any>>) => void;
 }
@@ -62,7 +66,7 @@ export const sourceReadTest = async (
   } = options;
   const config = resolveInput(configOrPath);
   const catalog = resolveInput(catalogOrPath);
-  const state = stateOrPath ? resolveInput(stateOrPath) : {};
+  const state = stateOrPath ? resolveInput(stateOrPath) : [];
   const res = await source.onBeforeRead(config, catalog, state);
   if (onBeforeReadResultConsumer) {
     onBeforeReadResultConsumer(res);

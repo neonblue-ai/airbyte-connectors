@@ -107,6 +107,22 @@ export interface AirbyteStream {
   default_cursor_field?: string[];
   source_defined_primary_key?: string[][];
   namespace?: string;
+  is_resumable?: boolean;
+}
+
+export interface ConfiguredAirbyteCatalogV2 {
+  streams: ConfiguredAirbyteStreamV2[];
+}
+
+export interface ConfiguredAirbyteStreamV2 {
+  stream: AirbyteStream;
+  sync_mode: SyncMode;
+  cursor_field?: string[];
+  destination_sync_mode: DestinationSyncMode;
+  primary_key?: string[][];
+  generation_id?: number;
+  minimum_generation_id?: number;
+  sync_id?: number;
 }
 
 export interface AirbyteCatalog {
@@ -265,6 +281,9 @@ export class AirbyteSpec implements AirbyteMessage {
   constructor(readonly spec: Spec) {}
 }
 
+/**
+ * @deprecated Use AirbyteState instead
+ */
 export interface AirbyteState {
   [stream: string]: any;
 }
@@ -303,13 +322,84 @@ export type AirbyteSourceStatus =
   | AirbyteSourceRunningStatus
   | AirbyteSourceSuccessStatus;
 
+/**
+ * @deprecated Use AirbyteStateMessageV2 instead
+ */
 export class AirbyteStateMessage implements AirbyteMessage {
   readonly type: AirbyteMessageType = AirbyteMessageType.STATE;
   constructor(readonly state: {data: AirbyteState}) {}
 }
 
+export type AirbyteStateMessageV2 =
+  | {
+      state_type: 'STREAM';
+      stream: AirbyteStreamStateV2;
+    }
+  | {
+      state_type: 'GLOBAL';
+      global: AirbyteGlobalStateV2;
+    };
+
+export type AirbyteStateMessageCombinedV2 = {
+  stream: AirbyteStateBlobV2;
+  global: AirbyteStateBlobV2;
+};
+
+export function isAirbyteGlobalStateMessageV2(
+  state: AirbyteStateMessageV2
+): state is {state_type: 'GLOBAL'; global: AirbyteGlobalStateV2} {
+  return state.state_type === 'GLOBAL';
+}
+
+export function isAirbyteStreamStateMessageV2(
+  state: AirbyteStateMessageV2
+): state is {state_type: 'STREAM'; stream: AirbyteStreamStateV2} {
+  return state.state_type === 'STREAM';
+}
+
+export interface AirbyteStateBlobV2 {
+  // the state data
+  [key: string]: any;
+}
+
+export interface AirbyteStreamStateV2 {
+  stream_descriptor: AirbyteStreamDescriptorV2;
+  stream_state?: AirbyteStateBlobV2;
+}
+
+export interface AirbyteGlobalStateV2 {
+  shared_state?: AirbyteStateBlobV2;
+  stream_states: AirbyteStreamStateV2[];
+}
+
+export type AirbyteStreamDescriptorV2 = {
+  name: string;
+  namespace?: string | null;
+};
+
+export class AirbyteStateMessageEnvelopeV2 implements AirbyteMessage {
+  readonly type: AirbyteMessageType = AirbyteMessageType.STATE;
+  constructor(
+    readonly state:
+      | {
+          state_type: 'STREAM';
+          stream: AirbyteStreamStateV2;
+        }
+      | {
+          state_type: 'GLOBAL';
+          global: {
+            shared_state: AirbyteStateBlobV2;
+            stream_states: AirbyteStreamStateV2[];
+          };
+        }
+  ) {}
+}
+
 // We need to extend AirbyteStateMessage so that Airbyte Server will pass the message to the destination
 // Airbyte Server only passes records and state messages to the destination
+/**
+ * @deprecated Faros specific
+ */
 export class AirbyteSourceStatusMessage extends AirbyteStateMessage {
   constructor(
     readonly state: {data: AirbyteState},
@@ -324,6 +414,9 @@ export class AirbyteSourceStatusMessage extends AirbyteStateMessage {
   }
 }
 
+/**
+ * @deprecated Faros specific
+ */
 export class AirbyteSourceConfigMessage extends AirbyteStateMessage {
   readonly type: AirbyteMessageType = AirbyteMessageType.STATE;
   constructor(
@@ -356,12 +449,24 @@ export class AirbyteSourceLogsMessage extends AirbyteStateMessage {
   }
 }
 
+/**
+ * @deprecated Use AirbyteStateMessageV2 instead
+ */
 export function isStateMessage(
   msg: AirbyteMessage
 ): msg is AirbyteStateMessage {
   return msg.type === AirbyteMessageType.STATE;
 }
 
+export function isStateMessageV2(
+  msg: AirbyteMessage
+): msg is AirbyteStateMessageEnvelopeV2 {
+  return msg.type === AirbyteMessageType.STATE;
+}
+
+/**
+ * @deprecated Faros specific
+ */
 export function isSourceStatusMessage(
   msg: AirbyteMessage
 ): msg is AirbyteSourceStatusMessage {
@@ -370,6 +475,9 @@ export function isSourceStatusMessage(
   );
 }
 
+/**
+ * @deprecated Faros specific
+ */
 export function isSourceConfigMessage(
   msg: AirbyteMessage
 ): msg is AirbyteSourceConfigMessage {
@@ -378,6 +486,9 @@ export function isSourceConfigMessage(
   );
 }
 
+/**
+ * @deprecated Faros specific
+ */
 export function isSourceLogsMessage(
   msg: AirbyteMessage
 ): msg is AirbyteSourceLogsMessage {
