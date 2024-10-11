@@ -1,0 +1,40 @@
+{
+  "streams": [
+    {
+      "stream": {
+        "name": "metrics",
+        "json_schema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "created": {
+              "type": "string"
+            },
+            "updated": {
+              "type": "string"
+            },
+            "integration": {
+              "type": "object"
+            },
+            "account_id": {
+              "type": "string"
+            }
+          },
+          "required": ["account_id"],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "supported_sync_modes": ["full_refresh", "incremental"],
+        "source_defined_cursor": true,
+        "default_cursor_field": ["created"],
+        "source_defined_primary_key": [["id"]]
+      },
+      "sync_mode": "full_refresh",
+      "destination_sync_mode": "overwrite"
+    }
+  ]
+}

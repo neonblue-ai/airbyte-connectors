@@ -28,22 +28,22 @@ export class AirbyteSourceLogger extends AirbyteLogger {
   override write(msg: AirbyteMessage): boolean {
     const ok = super.write(msg);
 
-    if (isAirbyteLog(msg) && shouldWriteLog(msg, this.level)) {
-      const sourceLog: AirbyteSourceLog = {
-        timestamp: Date.now(),
-        message: {
-          level: AirbyteLogLevelOrder(msg.log.level),
-          msg: msg.log.message,
-          stackTrace: msg.log.stack_trace,
-        },
-      };
+    // if (isAirbyteLog(msg) && shouldWriteLog(msg, this.level)) {
+    //   const sourceLog: AirbyteSourceLog = {
+    //     timestamp: Date.now(),
+    //     message: {
+    //       level: AirbyteLogLevelOrder(msg.log.level),
+    //       msg: msg.log.message,
+    //       stackTrace: msg.log.stack_trace,
+    //     },
+    //   };
 
-      this.batch.push(sourceLog);
-      this.totalSize += JSON.stringify(sourceLog).length;
-      if (this.totalSize > MAX_BATCH_SIZE_KB && this._getState) {
-        return this.flush() && ok;
-      }
-    }
+    //   this.batch.push(sourceLog);
+    //   this.totalSize += JSON.stringify(sourceLog).length;
+    //   if (this.totalSize > MAX_BATCH_SIZE_KB && this._getState) {
+    //     return this.flush() && ok;
+    //   }
+    // }
 
     return ok;
   }
